@@ -22,6 +22,10 @@ use tokio::{
 };
 use tracing::log::{debug, error, warn};
 
+#[cfg(test)]
+#[path = "tests/block_synchronizer_tests.rs"]
+mod block_synchronizer_tests;
+
 const SYNCHRONIZE_EXPIRATION_THRESHOLD: Duration = Duration::from_secs(2);
 const TIMEOUT_SYNCHRONIZING_BATCHES: Duration = Duration::from_secs(2);
 const TIMEOUT_FETCH_CERTIFICATES: Duration = Duration::from_secs(2);
