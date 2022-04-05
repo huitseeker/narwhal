@@ -78,7 +78,10 @@ impl<PublicKey: VerifyingKey> CertificatesResponse<PublicKey> {
     /// 2) validates the certificates
     /// Even if one found certificate is not valid, an error is returned. Otherwise
     /// and Ok result is returned with (any) found certificates.
-    fn validate_certificates(self) -> Result<Vec<Certificate<PublicKey>>, ()> {
+    fn validate_certificates(
+        self,
+        committee: &Committee<PublicKey>,
+    ) -> Result<Vec<Certificate<PublicKey>>, ()> {
         let peer_found_certs: Vec<Certificate<PublicKey>> =
             self.certificates.into_iter().filter_map(|e| e.1).collect();
 
@@ -91,7 +94,14 @@ impl<PublicKey: VerifyingKey> CertificatesResponse<PublicKey> {
             return Ok(vec![]);
         }
 
-        // TODO: VALIDATE THE CERTIFICATES!
+        if peer_found_certs
+            .iter()
+            .any(|c| c.verify(committee).is_err())
+        {
+            error!("Found at least one invalid certificate from peer {:?}. Will ignore all certificates", self.from);
+
+            return Err(());
+        }
 
         Ok(peer_found_certs)
     }
@@ -112,10 +122,6 @@ enum StateCommand<PublicKey: VerifyingKey> {
     TimeoutWaitingCertificates {
         request_id: RequestID,
         block_ids: Vec<CertificateDigest>,
-    },
-    TimeoutSynchronizingBatchesForBlock {
-        request_id: RequestID,
-        certificate: Certificate<PublicKey>,
     },
     ErrorSynchronizingBatchesForBlock {
         request_id: RequestID,
@@ -245,15 +251,6 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
 
                             self.handle_synchronize_block_result(certificate.digest(), get_result).await;
                         },
-                        StateCommand::TimeoutSynchronizingBatchesForBlock { request_id, certificate } => {
-                            println!("Timeout while synchronising batches for certificate {:?} for request id {:?}!", certificate.clone(), request_id);
-
-                            let get_result = || -> BlockSynchronizeResult<Certificate<PublicKey>> {
-                                Err(SyncError::Timeout { block_id: certificate.clone().digest() })
-                            };
-
-                            self.handle_synchronize_block_result(certificate.digest(), get_result).await;
-                        },
                         StateCommand::ErrorSynchronizingBatchesForBlock { request_id, certificate } => {
                             println!("Error synchronising batches {:?} for request id {:?}", certificate.clone(), request_id);
 
@@ -348,8 +345,14 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
 
         // now create the future that will wait to gather the responses
         Some(
-            Self::await_for_certificate_responses(key, block_ids, num_of_requests as u32, receiver)
-                .boxed(),
+            Self::await_for_certificate_responses(
+                key,
+                self.committee.clone(),
+                block_ids,
+                num_of_requests as u32,
+                receiver,
+            )
+            .boxed(),
         )
     }
 
@@ -478,21 +481,16 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
 
         // Wait for all the items to sync - have a timeout
         let result = timeout(TIMEOUT_SYNCHRONIZING_BATCHES, join_all(futures)).await;
-        if result.is_err() {
-            return StateCommand::TimeoutSynchronizingBatchesForBlock {
+        if result.is_err()
+            || result
+                .unwrap()
+                .into_iter()
+                .any(|r| r.map_or_else(|_| true, |f| f.is_none()))
+        {
+            return StateCommand::ErrorSynchronizingBatchesForBlock {
                 request_id,
                 certificate,
             };
-        }
-
-        // ensure there is no error and that there is some payload populated
-        for r in result.unwrap() {
-            if r.is_err() || r.unwrap().is_none() {
-                return StateCommand::ErrorSynchronizingBatchesForBlock {
-                    request_id,
-                    certificate,
-                };
-            }
         }
 
         StateCommand::BlockSynchronized {
@@ -519,6 +517,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
 
     async fn await_for_certificate_responses(
         request_id: RequestID,
+        committee: Committee<PublicKey>,
         block_ids: Vec<CertificateDigest>,
         num_of_requests_sent: u32,
         mut receiver: Receiver<CertificatesResponse<PublicKey>>,
@@ -536,7 +535,8 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         let mut num_of_responses = 0;
 
         // we want at least the (floor) 50% of responses to be received so we have enough
-        // nodes to load balance the follow up sync requests to.
+        // nodes to load balance the follow up sync requests to. We can change this
+        // and even make mandatory to wait until all responses have been received (with timeout).
         let requests_majority = (num_of_requests_sent as f32 / 2.0).ceil() as u32;
 
         let timer = sleep(TIMEOUT_FETCH_CERTIFICATES);
@@ -552,7 +552,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
 
                     num_of_responses += 1;
 
-                    match response.clone().validate_certificates() {
+                    match response.clone().validate_certificates(&committee) {
                         Ok(certificates) => {
                             certificates.iter().for_each(|c| {
                                 found_certificates.insert(c.digest(), c.clone());
