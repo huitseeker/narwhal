@@ -49,6 +49,14 @@ pub enum PrimaryMessage<PublicKey: VerifyingKey> {
     Vote(Vote<PublicKey>),
     Certificate(Certificate<PublicKey>),
     CertificatesRequest(Vec<CertificateDigest>, /* requestor */ PublicKey),
+
+    CertificatesBatchRequest {
+        certificate_ids: Vec<CertificateDigest>,
+        requestor: PublicKey,
+    },
+    CertificatesBatchResponse {
+        certificates: Vec<(CertificateDigest, Option<Certificate<PublicKey>>)>,
+    },
 }
 
 /// The messages sent by the primary to its workers.

@@ -27,6 +27,7 @@ mod primary;
 mod proposer;
 mod synchronizer;
 
+mod block_synchronizer;
 #[cfg(test)]
 #[path = "tests/common.rs"]
 mod common;
