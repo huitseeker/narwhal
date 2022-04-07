@@ -1,6 +1,6 @@
 use crate::{
     block_synchronizer::{
-        BlockSynchronizer, CertificatesResponse, Command, Peers, RequestID, StateCommand,
+        BlockSynchronizer, CertificatesResponse, Command, RequestID, StateCommand,
     },
     common::{
         certificate, create_db_stores, fixture_batch_with_transactions, fixture_header_builder,
@@ -11,17 +11,11 @@ use crate::{
 };
 use bincode::deserialize;
 use config::WorkerId;
-use crypto::{
-    ed25519::{Ed25519KeyPair, Ed25519PublicKey},
-    traits::{KeyPair, VerifyingKey},
-    Hash,
-};
+use crypto::{ed25519::Ed25519PublicKey, traits::VerifyingKey, Hash};
 use ed25519_dalek::Signer;
 use futures::{future::try_join_all, stream::FuturesUnordered, StreamExt};
 use network::SimpleSender;
-use rand::{rngs::StdRng, SeedableRng};
 use std::{collections::HashMap, net::SocketAddr, time::Duration};
-use std::collections::HashSet;
 use store::Store;
 use tokio::{
     net::TcpListener,
@@ -48,8 +42,6 @@ async fn test_successful_block_synchronization() {
         HashMap::new();
 
     let key = keys().pop().unwrap();
-    let mut worker_batches: HashMap<WorkerId, Vec<BatchDigest>> = HashMap::new();
-
     let worker_id_0 = 0;
     let worker_id_1 = 1;
 
@@ -66,16 +58,6 @@ async fn test_successful_block_synchronization() {
         let certificate = certificate(&header);
 
         certificates.insert(certificate.clone().digest(), certificate.clone());
-
-        worker_batches
-            .entry(worker_id_0)
-            .or_insert_with(Vec::new)
-            .push(batch_1.digest());
-
-        worker_batches
-            .entry(worker_id_1)
-            .or_insert_with(Vec::new)
-            .push(batch_2.digest());
     }
 
     // AND create the synchronizer
@@ -94,32 +76,13 @@ async fn test_successful_block_synchronization() {
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
     let handlers = FuturesUnordered::new();
-    for (i, primary) in committee.others_primaries(&name).into_iter().enumerate() {
+    for primary in committee.others_primaries(&name) {
         println!("New primary added: {:?}", primary.1.primary_to_primary);
-
-        // distribute the certificates that will be responded from the primaries
-        /*
-        let certs = certificates
-            .values()
-            .enumerate()
-            .take_while(|(index, certificate)|*index <= i)
-            .map(|(_, c)|c)
-            .cloned()
-            .collect();
-
-         */
-
-        // certs
-        let mut certs = HashMap::new();
-
-        //for block_id in block_ids.clone() {
-        //    certs.insert(block_id, certificates.get(&block_id).unwrap().clone());
-        //}
 
         let handler = primary_listener::<Ed25519PublicKey>(
             primary.0,
             primary.1.primary_to_primary,
-            certs,
+            certificates.clone(),
             tx_certificate_responses.clone(),
             payload_store.clone(),
         );
@@ -129,7 +92,7 @@ async fn test_successful_block_synchronization() {
     // WHEN
     tx_commands
         .send(Command::SynchroniseBlocks {
-            block_ids: vec![],// block_ids.clone(),
+            block_ids: certificates.keys().copied().collect(),
             respond_to: tx_synchronize,
         })
         .await
@@ -148,7 +111,7 @@ async fn test_successful_block_synchronization() {
     let timer = sleep(Duration::from_millis(5_000));
     tokio::pin!(timer);
 
-    let total_expected_results = 10; //block_ids.len();
+    let total_expected_results = certificates.len();
     let mut total_results_received = 0;
 
     loop {
@@ -192,41 +155,21 @@ async fn test_await_for_certificate_responses_from_majority() {
         HashMap::new();
 
     let key = keys().pop().unwrap();
-    let mut worker_batches: HashMap<WorkerId, Vec<BatchDigest>> = HashMap::new();
-
-    let worker_id_0 = 0;
-    let worker_id_1 = 1;
 
     // AND generate headers with distributed batches between 2 workers (0 and 1)
     for _ in 0..5 {
-        let batch_1 = fixture_batch_with_transactions(10);
-        let batch_2 = fixture_batch_with_transactions(10);
-
         let header = fixture_header_builder()
-            .with_payload_batch(batch_1.clone(), worker_id_0)
-            .with_payload_batch(batch_2.clone(), worker_id_1)
+            .with_payload_batch(fixture_batch_with_transactions(10), 0)
             .build(|payload| key.sign(payload));
 
         let certificate = certificate(&header);
 
         certificates.insert(certificate.clone().digest(), certificate.clone());
-
-        worker_batches
-            .entry(worker_id_0)
-            .or_insert_with(Vec::new)
-            .push(batch_1.digest());
-
-        worker_batches
-            .entry(worker_id_1)
-            .or_insert_with(Vec::new)
-            .push(batch_2.digest());
     }
 
     let block_ids: Vec<CertificateDigest> = certificates.keys().copied().collect();
 
     let request_id = RequestID::from(block_ids.as_slice());
-
-    let num_of_requests = 3;
 
     let primaries = committee.others_primaries(&name);
 
@@ -236,31 +179,24 @@ async fn test_await_for_certificate_responses_from_majority() {
             .map(|e| (*e.0, Some(e.1.clone())))
             .collect();
 
-    let primary_1 = primaries.get(0).unwrap().clone().0;
-    let primary_2 = primaries.get(1).unwrap().clone().0;
+    // AND send the responses from all the primaries
+    for primary in primaries.clone() {
+        let name = primary.0;
 
-    tx_certificate_responses
-        .send(CertificatesResponse {
-            certificates: certificates_to_be_sent.clone(),
-            from: primary_1.clone(),
-        })
-        .await
-        .unwrap();
-
-    // send 2 certificates from peer 2
-    tx_certificate_responses
-        .send(CertificatesResponse {
-            certificates: certificates_to_be_sent.clone(),
-            from: primary_2.clone(),
-        })
-        .await
-        .unwrap();
+        tx_certificate_responses
+            .send(CertificatesResponse {
+                certificates: certificates_to_be_sent.clone(),
+                from: name,
+            })
+            .await
+            .unwrap();
+    }
 
     let result = BlockSynchronizer::await_for_certificate_responses(
         request_id,
         committee.clone(),
         block_ids,
-        num_of_requests,
+        primaries.into_iter().map(|(name, _)| name).collect(),
         rx_certificate_responses,
     )
     .await;
@@ -268,81 +204,29 @@ async fn test_await_for_certificate_responses_from_majority() {
     match result {
         StateCommand::SynchronizeBatches { request_id, peers } => {
             assert_eq!(request_id, request_id);
-            assert_eq!(peers.peers.len(), 2);
-            /*
-            for c in certificates_by_id {
-                assert!(certificates.contains_key(&c.0));
-            }
 
-            assert_eq!(
-                certificates_by_peer.get(&primary_1).unwrap().len(),
-                certificates_to_be_sent.clone().len()
-            );
-            assert_eq!(
-                certificates_by_peer.get(&primary_2).unwrap().len(),
-                certificates_to_be_sent.clone().len()
-            );*/
+            // we expect to have "exited" when 2 responses have been received
+            // since this is the 50% of the total of peers.
+            assert_eq!(peers.peers.len(), 2);
+
+            // ensure that each peer has the requested certificates
+            for (_, peer) in peers.peers {
+                assert_eq!(
+                    peer.values_able_to_serve.len(),
+                    certificates.len(),
+                    "Mismatch in certificates responded than expected"
+                );
+
+                for (digest, _) in peer.values_able_to_serve {
+                    assert!(
+                        certificates.contains_key(&digest),
+                        "Certificate not expected"
+                    );
+                }
+            }
         }
         _ => {
             panic!("Expected to receive a successful synchronize batches command");
-        }
-    }
-}
-
-#[tokio::test]
-async fn test_assign_certificates_to_peers_uniquely() {
-    // AND some blocks (certificates)
-    let mut certificates: Vec<Certificate<Ed25519PublicKey>> = Vec::new();
-    let key = keys().pop().unwrap();
-
-    // AND generate certificates
-    for _ in 0..=7 {
-        let batch = fixture_batch_with_transactions(20);
-
-        let header = fixture_header_builder()
-            .with_payload_batch(batch, 0)
-            .build(|payload| key.sign(payload));
-
-        certificates.push(certificate(&header));
-    }
-
-    // generate a few peers and assign some certificates as theoretical responses
-    // now just copy everything to all
-    let mut rng = StdRng::from_seed([0; 32]);
-
-    let mut peers_1 = Peers::<Ed25519PublicKey>::new();
-    let mut peers_2 = Peers::<Ed25519PublicKey>::new();
-
-    for _ in 0..2 {
-        let key_pair = Ed25519KeyPair::generate(&mut rng);
-        peers_1.add_peer(key_pair.public().clone(), certificates.clone());
-        peers_2.add_peer(key_pair.public().clone(), certificates.clone());
-    }
-
-    // WHEN
-    peers_1.rebalance_certificates();
-    peers_2.rebalance_certificates();
-
-    // THEN
-    assert_eq!(peers_1.peers.len(), 2);
-    assert_eq!(peers_2.peers.len(), 2);
-
-    // The certificates should be balanced to the peers.
-    let mut seen_certificates = HashMap::new();
-
-    for (_, peer) in peers_1.peers {
-        assert_eq!(peer.assigned_certificates().len(), 4);
-
-        for c in peer.assigned_certificates() {
-            assert_eq!(seen_certificates.insert(c.digest()), true, "Certificate already assigned to another peer");
-        }
-    }
-
-    for (_, peer) in peers_2.peers {
-        assert_eq!(peer.assigned_certificates().len(), 4);
-
-        for c in peer.assigned_certificates() {
-            assert_eq!(seen_certificates.insert(c.digest()), true, "Certificate already assigned to another peer");
         }
     }
 }
@@ -370,31 +254,34 @@ pub fn primary_listener<PublicKey: VerifyingKey>(
                         certificate_ids,
                         requestor,
                     }) => {
-                        assert_eq!(certificate_ids.len(), expected_certificates.len());
                         debug!("{:?}", requestor);
 
-                        /*
-                        assert_eq!(
-                            ids.clone(),
-                            expected_batch_ids,
-                            "Expected batch ids not the same for [{}]",
-                            &address
-                        );*/
+                        let mut response_certificates: Vec<(
+                            CertificateDigest,
+                            Option<Certificate<PublicKey>>,
+                        )> = Vec::new();
 
-                        let mut c: Vec<(CertificateDigest, Option<Certificate<PublicKey>>)> =
-                            Vec::new();
-                        for entry in expected_certificates {
-                            c.push((entry.0, Some(entry.1.clone())));
+                        for c_id in certificate_ids {
+                            let cert_option = expected_certificates.get(&c_id);
+
+                            assert!(
+                                cert_option.is_some(),
+                                "Received certificate not amongst the expected"
+                            );
+
+                            let certificate = cert_option.unwrap().clone();
+
+                            response_certificates.push((c_id, Some(certificate.clone())));
 
                             // write the payload to store and imitate a sync with the workers
-                            for p in entry.1.header.payload {
-                                payload_store.write(p, 1).await;
+                            for (digest, worker_id) in certificate.header.payload {
+                                payload_store.write((digest, worker_id), 1).await;
                             }
                         }
 
                         tx_certificate_responses
                             .send(CertificatesResponse {
-                                certificates: c,
+                                certificates: response_certificates,
                                 from: name.clone(),
                             })
                             .await

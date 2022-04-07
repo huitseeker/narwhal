@@ -13,7 +13,7 @@ use futures::{
     FutureExt, StreamExt,
 };
 use network::SimpleSender;
-use std::{cell::RefCell, cmp::Ordering, collections::HashMap, net::SocketAddr, time::Duration};
+use std::{cell::RefCell, cmp::Ordering, collections::HashMap, time::Duration};
 use store::Store;
 use thiserror::Error;
 use tokio::{
@@ -133,7 +133,7 @@ enum StateCommand<PublicKey: VerifyingKey> {
     },
     SynchronizeBatches {
         request_id: RequestID,
-        peers: Peers<PublicKey>,
+        peers: Peers<PublicKey, Certificate<PublicKey>>,
     },
     BlockSynchronized {
         request_id: RequestID,
@@ -338,11 +338,11 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         let key = RequestID::from(block_ids.as_slice());
 
         // broadcast the message to fetch  the certificates
-        let num_of_requests = self
+        let primaries = self
             .broadcast_certificates_batch_request(block_ids.clone())
             .await;
 
-        let (sender, receiver) = channel(num_of_requests);
+        let (sender, receiver) = channel(primaries.as_slice().len());
 
         // record the request key to forward the results to the dedicated sender
         self.map_certificate_responses_senders.insert(key, sender);
@@ -353,7 +353,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                 key,
                 self.committee.clone(),
                 block_ids,
-                num_of_requests as u32,
+                primaries,
                 receiver,
             )
             .boxed(),
@@ -361,11 +361,11 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     }
 
     // Broadcasts a CertificatesBatchRequest to all the other primary nodes for the provided
-    // block ids. It returns back the number of primaries
+    // block ids. It returns back the primary names to which we have sent the requests.
     async fn broadcast_certificates_batch_request(
         &mut self,
         block_ids: Vec<CertificateDigest>,
-    ) -> usize {
+    ) -> Vec<PublicKey> {
         // Naively now just broadcast the request to all the primaries
         let message = PrimaryMessage::<PublicKey>::CertificatesBatchRequest {
             certificate_ids: block_ids,
@@ -373,24 +373,29 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         };
         let bytes = bincode::serialize(&message).expect("Failed to serialize request");
 
-        let primaries_addresses: Vec<SocketAddr> = self
-            .committee
-            .others_primaries(&self.name)
-            .iter()
-            .map(|(_, x)| x.primary_to_primary)
-            .collect();
+        let primaries_addresses = self.committee.others_primaries(&self.name);
 
         self.network
-            .broadcast(primaries_addresses.clone(), Bytes::from(bytes))
+            .broadcast(
+                primaries_addresses
+                    .clone()
+                    .into_iter()
+                    .map(|(_, address)| address.primary_to_primary)
+                    .collect(),
+                Bytes::from(bytes),
+            )
             .await;
 
-        primaries_addresses.len()
+        primaries_addresses
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect()
     }
 
     async fn handle_synchronize_batches_for_blocks<'a>(
         &mut self,
         request_id: RequestID,
-        mut peers: Peers<PublicKey>,
+        mut peers: Peers<PublicKey, Certificate<PublicKey>>,
     ) -> Vec<BoxFuture<'a, StateCommand<PublicKey>>> {
         // Important step to do that first, so we give the opportunity
         // to other future requests (with same set of ids) making a request.
@@ -398,16 +403,16 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
 
         // Rebalance the certificates to ensure that
         // those are uniquely distributed across the peers.
-        peers.rebalance_certificates();
+        peers.rebalance_values();
 
         // naively sync the batches for all the certificates for each peer
         for (_, peer) in peers.peers.iter() {
-            self.send_synchronize_batches_requests(peer.clone().name, peer.assigned_certificates())
+            self.send_synchronize_batches_requests(peer.clone().name, peer.assigned_values())
                 .await
         }
 
         peers
-            .unique_certificates()
+            .unique_values()
             .into_iter()
             .map(|certificate| {
                 Self::wait_for_block_batches(request_id, self.payload_store.clone(), certificate)
@@ -496,16 +501,17 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         request_id: RequestID,
         committee: Committee<PublicKey>,
         block_ids: Vec<CertificateDigest>,
-        num_of_requests_sent: u32,
+        primaries_sent_requests_to: Vec<PublicKey>,
         mut receiver: Receiver<CertificatesResponse<PublicKey>>,
     ) -> StateCommand<PublicKey> {
         let total_expected_certificates = block_ids.len();
         let mut num_of_responses: f32 = 0.0;
+        let num_of_requests_sent: f32 = primaries_sent_requests_to.len() as f32;
 
         let timer = sleep(TIMEOUT_FETCH_CERTIFICATES);
         tokio::pin!(timer);
 
-        let mut peers = Peers::<PublicKey>::new();
+        let mut peers = Peers::<PublicKey, Certificate<PublicKey>>::new();
 
         loop {
             tokio::select! {
@@ -522,10 +528,8 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                             // add them as a new peer
                             peers.add_peer(response.from.clone(), certificates);
 
-                            let requests_received_ratio = ((num_of_responses / num_of_requests_sent as f32) * 100.0).round();
-
-                            if peers.unique_certificates().len() == total_expected_certificates &&
-                            requests_received_ratio >= CERTIFICATE_RESPONSES_RATIO_THRESHOLD
+                            if peers.unique_values().len() == total_expected_certificates &&
+                            Self::reached_response_ratio(num_of_responses, num_of_requests_sent)
                             {
                                 return StateCommand::SynchronizeBatches {
                                 request_id,
@@ -540,7 +544,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                 },
                 () = &mut timer => {
                     // We did time out, but we have managed to gather all the desired certificates
-                    if peers.unique_certificates().len() == total_expected_certificates {
+                    if peers.unique_values().len() == total_expected_certificates {
                         return StateCommand::SynchronizeBatches {
                             request_id,
                             peers
@@ -552,36 +556,41 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
             }
         }
     }
+
+    fn reached_response_ratio(num_of_responses: f32, num_of_expected_responses: f32) -> bool {
+        let ratio: f32 = ((num_of_responses / num_of_expected_responses) * 100.0).round();
+        ratio >= CERTIFICATE_RESPONSES_RATIO_THRESHOLD * 100.0
+    }
 }
 
 #[derive(Clone)]
-struct Peer<PublicKey: VerifyingKey> {
+struct Peer<PublicKey: VerifyingKey, Value: Hash + Clone> {
     name: PublicKey,
-    certificates_able_to_serve: HashMap<CertificateDigest, Certificate<PublicKey>>,
-    assigned_certificates: HashMap<CertificateDigest, Certificate<PublicKey>>,
+    values_able_to_serve: HashMap<<Value as Hash>::TypedDigest, Value>,
+    assigned_values: HashMap<<Value as Hash>::TypedDigest, Value>,
 }
 
-impl<PublicKey: VerifyingKey> Peer<PublicKey> {
-    fn new(name: PublicKey, certificates_able_to_serve: Vec<Certificate<PublicKey>>) -> Self {
-        let certs: HashMap<CertificateDigest, Certificate<PublicKey>> = certificates_able_to_serve
+impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peer<PublicKey, Value> {
+    fn new(name: PublicKey, values_able_to_serve: Vec<Value>) -> Self {
+        let certs: HashMap<<Value as crypto::Hash>::TypedDigest, Value> = values_able_to_serve
             .into_iter()
             .map(|c| (c.digest(), c))
             .collect();
 
         Peer {
             name,
-            certificates_able_to_serve: certs,
-            assigned_certificates: HashMap::new(),
+            values_able_to_serve: certs,
+            assigned_values: HashMap::new(),
         }
     }
 
-    fn assign_certificate(&mut self, certificate: &Certificate<PublicKey>) {
-        self.assigned_certificates
+    fn assign_values(&mut self, certificate: &Value) {
+        self.assigned_values
             .insert(certificate.digest(), certificate.clone());
     }
 
-    fn assigned_certificates(&self) -> Vec<Certificate<PublicKey>> {
-        self.assigned_certificates
+    fn assigned_values(&self) -> Vec<Value> {
+        self.assigned_values
             .clone()
             .into_iter()
             .map(|v| v.1)
@@ -589,12 +598,12 @@ impl<PublicKey: VerifyingKey> Peer<PublicKey> {
     }
 }
 
-struct Peers<PublicKey: VerifyingKey> {
-    peers: HashMap<PublicKey, Peer<PublicKey>>,
+struct Peers<PublicKey: VerifyingKey, Value: Hash + Clone> {
+    peers: HashMap<PublicKey, Peer<PublicKey, Value>>,
     rebalanced: RefCell<bool>,
 }
 
-impl<PublicKey: VerifyingKey> Peers<PublicKey> {
+impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peers<PublicKey, Value> {
     fn new() -> Self {
         Self {
             peers: HashMap::new(),
@@ -602,15 +611,15 @@ impl<PublicKey: VerifyingKey> Peers<PublicKey> {
         }
     }
 
-    fn unique_certificates(&self) -> Vec<Certificate<PublicKey>> {
-        let result: HashMap<CertificateDigest, Certificate<PublicKey>> = self
+    fn unique_values(&self) -> Vec<Value> {
+        let result: HashMap<<Value as Hash>::TypedDigest, Value> = self
             .peers
             .values()
             .flat_map(|v| {
                 if *self.rebalanced.borrow() {
-                    v.assigned_certificates.clone()
+                    v.assigned_values.clone()
                 } else {
-                    v.certificates_able_to_serve.clone()
+                    v.values_able_to_serve.clone()
                 }
             })
             .collect();
@@ -622,110 +631,361 @@ impl<PublicKey: VerifyingKey> Peers<PublicKey> {
         self.peers.contains_key(name)
     }
 
-    fn add_peer(&mut self, name: PublicKey, available_certificates: Vec<Certificate<PublicKey>>) {
+    fn add_peer(&mut self, name: PublicKey, available_values: Vec<Value>) {
+        self.ensure_not_rebalanced();
         self.peers
-            .insert(name.clone(), Peer::new(name, available_certificates));
+            .insert(name.clone(), Peer::new(name, available_values));
     }
 
-    /// Re-distributes the certificates to the peers in a load balanced manner.
+    /// Re-distributes the values to the peers in a load balanced manner.
     /// We expect to have duplicates across the peers. The goal is in the end
-    /// for each peer to have a unique list of certificates and those lists to
+    /// for each peer to have a unique list of values and those lists to
     /// not differ significantly, so we balance the load.
-    /// The method shouldn't be called more than once.
-    fn rebalance_certificates(&mut self) {
-        if *self.rebalanced.borrow() {
-            panic!("rebalance_certificates has been called more than once, this is not allowed");
-        }
+    /// Once the peers are rebalanced, then no other operation that is allowed
+    /// mutates the struct is allowed.
+    fn rebalance_values(&mut self) {
+        self.ensure_not_rebalanced();
 
-        let certificates = self.unique_certificates();
+        let values = self.unique_values();
 
-        for certificate in certificates {
-            self.reassign_certificate(certificate);
+        for v in values {
+            self.reassign_value(v);
         }
 
         self.rebalanced.replace(true);
     }
 
-    fn reassign_certificate(&mut self, certificate: Certificate<PublicKey>) {
-        let mut peer = self.peer_to_assign_certificate(&certificate);
+    fn reassign_value(&mut self, value: Value) {
+        self.ensure_not_rebalanced();
 
-        // step 5 - assign the certificate to this peer
-        peer.assign_certificate(&certificate);
+        let mut peer = self.peer_to_assign_value(&value);
+
+        // step 5 - assign the value to this peer
+        peer.assign_values(&value);
 
         self.peers.insert(peer.clone().name, peer);
 
-        // step 6 - delete the certificate from all the peers where is found
-        self.delete_certificate_from_peers(&certificate);
+        // step 6 - delete the values from all the peers where is found
+        self.delete_values_from_peers(&value);
     }
 
-    fn peer_to_assign_certificate(
-        &mut self,
-        certificate: &Certificate<PublicKey>,
-    ) -> Peer<PublicKey> {
-        let p = self.ordered_peers_have_certificate(certificate.digest());
+    fn peer_to_assign_value(&mut self, value: &Value) -> Peer<PublicKey, Value> {
+        self.ensure_not_rebalanced();
 
-        p.get(0)
-            .expect("Expected to have found at least one peer that can serve the certificate")
+        let mut p = self.ordered_peers_have_value(value.digest());
+
+        p.get_mut(0)
+            .expect("Expected to have found at least one peer that can serve the value")
             .clone()
     }
 
     /// This method will perform two operations:
-    /// 1) Will return only the peers that certificate dictated by the
-    /// provided `certificate_id`
+    /// 1) Will return only the peers that value dictated by the
+    /// provided `value_id`
     /// 2) Will order the peers in ascending order based on their already
-    /// assigned certificates and the ones able to serve.
-    fn ordered_peers_have_certificate(
+    /// assigned values and the ones able to serve.
+    fn ordered_peers_have_value(
         &mut self,
-        certificate_id: CertificateDigest,
-    ) -> Vec<Peer<PublicKey>> {
+        value_id: <Value as Hash>::TypedDigest,
+    ) -> Vec<Peer<PublicKey, Value>> {
+        self.ensure_not_rebalanced();
+
         // step 1 - find the peers who have this id
-        let mut peers_with_certificate: Vec<Peer<PublicKey>> = self
+        let mut peers_with_value: Vec<Peer<PublicKey, Value>> = self
             .peers
             .iter()
-            .filter(|p| p.1.certificates_able_to_serve.contains_key(&certificate_id))
+            .filter(|p| p.1.values_able_to_serve.contains_key(&value_id))
             .map(|p| p.1.clone())
             .collect();
 
-        peers_with_certificate.sort_by(|a, b| {
+        peers_with_value.sort_by(|a, b| {
             // step 2 - order the peers in ascending order based on the number of
-            // certificates they have been assigned + able to serve. We want to
+            // values they have been assigned + able to serve. We want to
             // prioritise those that have the smallest set of those.
-            let a_size = a.assigned_certificates.len() + a.certificates_able_to_serve.len();
-            let b_size = b.assigned_certificates.len() + b.certificates_able_to_serve.len();
+            let a_size = a.assigned_values.len() + a.values_able_to_serve.len();
+            let b_size = b.assigned_values.len() + b.values_able_to_serve.len();
 
-            // if equal in size, compare on the assigned_certificates.
+            // if equal in size, compare on the assigned_values.
             // We want to prioritise then ones that have less already
-            // assigned certificates so we give them the chance to start
+            // assigned values so we give them the chance to start
             // getting some.
-            if a_size == b_size {
-                return if a.assigned_certificates.len() > b.assigned_certificates.len() {
-                    Ordering::Greater
-                } else if a.assigned_certificates.len() < b.assigned_certificates.len(){
-                    Ordering::Less
-                } else {
-                    // In case they are absolutely equal, we prioritise the one whose
-                    // name is "less than" the other. This isn't really necessary, but
-                    // it gives us some determinism.
-                    if a.name.lt(&b.name) {
-                        return Ordering::Less;
+            match a_size.cmp(&b_size) {
+                Ordering::Equal => {
+                    match a.assigned_values.len().cmp(&b.assigned_values.len()) {
+                        Ordering::Equal => {
+                            // In case they are absolutely equal, we prioritise the one whose
+                            // name is "less than" the other. This isn't really necessary, but
+                            // it gives us some determinism.
+                            a.name.cmp(&b.name)
+                        }
+                        other => other,
                     }
-                    Ordering::Greater
-                };
-            } else if a_size > b_size {
-                return Ordering::Greater;
+                }
+                other => other,
             }
-            Ordering::Less
         });
 
-        peers_with_certificate
+        peers_with_value
     }
 
     // Deletes the provided certificate from the list of available
-    // certificates from all the peers.
-    fn delete_certificate_from_peers(&mut self, certificate: &Certificate<PublicKey>) {
+    // value from all the peers.
+    fn delete_values_from_peers(&mut self, value: &Value) {
+        self.ensure_not_rebalanced();
+
         for (_, peer) in self.peers.iter_mut() {
-            peer.certificates_able_to_serve
-                .remove(&certificate.digest());
+            peer.values_able_to_serve.remove(&value.digest());
+        }
+    }
+
+    fn ensure_not_rebalanced(&mut self) {
+        if *self.rebalanced.borrow() {
+            panic!("rebalance has been called, this operation is not allowed");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::block_synchronizer::Peers;
+    use blake2::{digest::Update, VarBlake2b};
+    use crypto::{
+        ed25519::{Ed25519KeyPair, Ed25519PublicKey},
+        traits::KeyPair,
+        Digest, Hash, DIGEST_LEN,
+    };
+    use rand::{rngs::StdRng, SeedableRng};
+    use std::{
+        borrow::Borrow,
+        collections::{HashMap, HashSet},
+        fmt,
+    };
+
+    #[test]
+    fn test_assign_certificates_to_peers_when_all_respond() {
+        struct TestCase {
+            num_of_certificates: u8,
+            num_of_peers: u8,
+        }
+
+        let test_cases: Vec<TestCase> = vec![
+            TestCase {
+                num_of_certificates: 5,
+                num_of_peers: 4,
+            },
+            TestCase {
+                num_of_certificates: 8,
+                num_of_peers: 2,
+            },
+            TestCase {
+                num_of_certificates: 3,
+                num_of_peers: 2,
+            },
+            TestCase {
+                num_of_certificates: 20,
+                num_of_peers: 5,
+            },
+            TestCase {
+                num_of_certificates: 10,
+                num_of_peers: 1,
+            },
+        ];
+
+        for test in test_cases {
+            println!(
+                "Testing case where num_of_certificates={} , num_of_peers={}",
+                test.num_of_certificates, test.num_of_peers
+            );
+            let mut mock_certificates = Vec::new();
+
+            for i in 0..test.num_of_certificates {
+                mock_certificates.push(MockCertificate(i));
+            }
+
+            let mut rng = StdRng::from_seed([0; 32]);
+
+            let mut peers = Peers::<Ed25519PublicKey, MockCertificate>::new();
+
+            for _ in 0..test.num_of_peers {
+                let key_pair = Ed25519KeyPair::generate(&mut rng);
+                peers.add_peer(key_pair.public().clone(), mock_certificates.clone());
+            }
+
+            // WHEN
+            peers.rebalance_values();
+
+            // THEN
+            assert_eq!(peers.peers.len() as u8, test.num_of_peers);
+
+            // The certificates should be balanced to the peers.
+            let mut seen_certificates = HashSet::new();
+
+            for (_, peer) in peers.peers {
+                // we want to ensure that a peer has got at least a certificate
+                assert_ne!(
+                    peer.assigned_values().len(),
+                    0,
+                    "Expected peer to have been assigned at least 1 certificate"
+                );
+
+                for c in peer.assigned_values() {
+                    //println!("Cert for peer {}: {}", peer.name.encode_base64(), c.0);
+                    assert!(
+                        seen_certificates.insert(c.digest()),
+                        "Certificate already assigned to another peer"
+                    );
+                }
+            }
+
+            // ensure that all the initial certificates have been assigned
+            assert_eq!(
+                seen_certificates.len(),
+                mock_certificates.len(),
+                "Returned certificates != Expected certificates"
+            );
+
+            for c in mock_certificates {
+                assert!(
+                    seen_certificates.contains(&c.digest()),
+                    "Expected certificate not found in set of returned ones"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_assign_certificates_to_peers_when_all_respond_uniquely() {
+        struct TestCase {
+            num_of_certificates_each_peer: u8,
+            num_of_peers: u8,
+        }
+
+        let test_cases: Vec<TestCase> = vec![
+            TestCase {
+                num_of_certificates_each_peer: 5,
+                num_of_peers: 4,
+            },
+            TestCase {
+                num_of_certificates_each_peer: 8,
+                num_of_peers: 2,
+            },
+            TestCase {
+                num_of_certificates_each_peer: 3,
+                num_of_peers: 2,
+            },
+            TestCase {
+                num_of_certificates_each_peer: 20,
+                num_of_peers: 5,
+            },
+            TestCase {
+                num_of_certificates_each_peer: 10,
+                num_of_peers: 1,
+            },
+            TestCase {
+                num_of_certificates_each_peer: 0,
+                num_of_peers: 4,
+            },
+        ];
+
+        for test in test_cases {
+            println!(
+                "Testing case where num_of_certificates_each_peer={} , num_of_peers={}",
+                test.num_of_certificates_each_peer, test.num_of_peers
+            );
+            let mut mock_certificates_by_peer = HashMap::new();
+
+            let mut rng = StdRng::from_seed([0; 32]);
+
+            let mut peers = Peers::<Ed25519PublicKey, MockCertificate>::new();
+
+            for peer_index in 0..test.num_of_peers {
+                let key_pair = Ed25519KeyPair::generate(&mut rng);
+                let peer_name = key_pair.public().clone();
+                let mut mock_certificates = Vec::new();
+
+                for i in 0..test.num_of_certificates_each_peer {
+                    mock_certificates.push(MockCertificate(
+                        i + (peer_index * test.num_of_certificates_each_peer),
+                    ));
+                }
+
+                peers.add_peer(peer_name.clone(), mock_certificates.clone());
+
+                mock_certificates_by_peer.insert(peer_name, mock_certificates.clone());
+            }
+
+            // WHEN
+            peers.rebalance_values();
+
+            // THEN
+            assert_eq!(peers.peers.len() as u8, test.num_of_peers);
+
+            // The certificates should be balanced to the peers.
+            let mut seen_certificates = HashSet::new();
+
+            for (_, peer) in peers.peers {
+                // we want to ensure that a peer has got at least a certificate
+                let peer_certs = mock_certificates_by_peer.get(&peer.name).unwrap();
+                assert_eq!(
+                    peer.assigned_values().len(),
+                    peer_certs.len(),
+                    "Expected peer to have been assigned the required certificates"
+                );
+
+                for c in peer.assigned_values() {
+                    let found = peer_certs
+                        .clone()
+                        .into_iter()
+                        .any(|c| c.digest().eq(&c.digest()));
+
+                    assert!(found, "Assigned certificate not in set of expected");
+                    assert!(
+                        seen_certificates.insert(c.digest()),
+                        "Certificate already assigned to another peer"
+                    );
+                }
+            }
+        }
+    }
+
+    // The mock certificate structure we'll use for our tests
+    // It's easier to debug since the value is a u8 which can
+    // be easily understood, print etc.
+    #[derive(Clone)]
+    struct MockCertificate(u8);
+
+    #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    pub struct MockDigest([u8; DIGEST_LEN]);
+
+    impl From<MockDigest> for Digest {
+        fn from(hd: MockDigest) -> Self {
+            Digest::new(hd.0)
+        }
+    }
+
+    impl fmt::Debug for MockDigest {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+            write!(f, "{}", base64::encode(&self.0))
+        }
+    }
+
+    impl fmt::Display for MockDigest {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+            write!(f, "{}", base64::encode(&self.0).get(0..16).unwrap())
+        }
+    }
+
+    impl Hash for MockCertificate {
+        type TypedDigest = MockDigest;
+
+        fn digest(&self) -> MockDigest {
+            let v = self.0.borrow();
+
+            let hasher_update = |hasher: &mut VarBlake2b| {
+                hasher.update([*v].as_ref());
+            };
+
+            MockDigest(crypto::blake2b_256(hasher_update))
         }
     }
 }
