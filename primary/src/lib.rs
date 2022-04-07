@@ -31,6 +31,7 @@ mod block_synchronizer;
 #[cfg(test)]
 #[path = "tests/common.rs"]
 mod common;
+mod utils;
 
 pub use crate::{
     block_remover::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage},

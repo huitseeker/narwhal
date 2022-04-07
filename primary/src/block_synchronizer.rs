@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use crate::{
-    primary::PrimaryMessage, BatchDigest, Certificate, CertificateDigest, PayloadToken,
+    primary::PrimaryMessage, utils, BatchDigest, Certificate, CertificateDigest, PayloadToken,
     PrimaryWorkerMessage,
 };
 use blake2::digest::Update;
@@ -13,7 +13,7 @@ use futures::{
     FutureExt, StreamExt,
 };
 use network::SimpleSender;
-use std::{collections::HashMap, net::SocketAddr, time::Duration};
+use std::{cell::RefCell, cmp::Ordering, collections::HashMap, net::SocketAddr, time::Duration};
 use store::Store;
 use thiserror::Error;
 use tokio::{
@@ -29,6 +29,10 @@ mod block_synchronizer_tests;
 const SYNCHRONIZE_EXPIRATION_THRESHOLD: Duration = Duration::from_secs(2);
 const TIMEOUT_SYNCHRONIZING_BATCHES: Duration = Duration::from_secs(2);
 const TIMEOUT_FETCH_CERTIFICATES: Duration = Duration::from_secs(2);
+
+/// The minimum percentage of responses that should be received when requesting
+/// the certificates from peers in order to procceed to next state.
+const CERTIFICATE_RESPONSES_RATIO_THRESHOLD: f32 = 0.5;
 
 type ResultSender<T> = Sender<BlockSynchronizeResult<Certificate<T>>>;
 type BlockSynchronizeResult<T> = Result<T, SyncError>;
@@ -129,8 +133,7 @@ enum StateCommand<PublicKey: VerifyingKey> {
     },
     SynchronizeBatches {
         request_id: RequestID,
-        certificates_by_peer: HashMap<PublicKey, Vec<Certificate<PublicKey>>>,
-        certificates_by_id: HashMap<CertificateDigest, Certificate<PublicKey>>,
+        peers: Peers<PublicKey>,
     },
     BlockSynchronized {
         request_id: RequestID,
@@ -230,10 +233,10 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                 },
                 Some(result) = waiting.next() => {
                     match result {
-                        StateCommand::SynchronizeBatches { request_id, certificates_by_peer, certificates_by_id } => {
+                        StateCommand::SynchronizeBatches { request_id, peers } => {
                             println!("Fetched certificates, now synchronizing batches for request id {:?}", request_id);
 
-                            let futures = self.handle_synchronize_batches_for_blocks(request_id, certificates_by_peer, certificates_by_id).await;
+                            let futures = self.handle_synchronize_batches_for_blocks(request_id, peers).await;
                             for fut in futures {
                                 waiting.push(fut);
                             }
@@ -332,13 +335,14 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
             return None;
         }
 
+        let key = RequestID::from(block_ids.as_slice());
+
         // broadcast the message to fetch  the certificates
         let num_of_requests = self
             .broadcast_certificates_batch_request(block_ids.clone())
             .await;
 
         let (sender, receiver) = channel(num_of_requests);
-        let key = RequestID::from(block_ids.as_slice());
 
         // record the request key to forward the results to the dedicated sender
         self.map_certificate_responses_senders.insert(key, sender);
@@ -386,86 +390,59 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     async fn handle_synchronize_batches_for_blocks<'a>(
         &mut self,
         request_id: RequestID,
-        certificates_by_peer: HashMap<PublicKey, Vec<Certificate<PublicKey>>>,
-        certificates_by_id: HashMap<CertificateDigest, Certificate<PublicKey>>,
+        mut peers: Peers<PublicKey>,
     ) -> Vec<BoxFuture<'a, StateCommand<PublicKey>>> {
-        // Synchronise batches according to a provided list
-
-        // Now wait to synchronise the batches for each block
-        /*
-        let mut peer_and_certificates = Vec::new();
-
-        for entry in certificates_by_peer {
-            peer_and_certificates.push(entry);
-        }
-
-        let mut certificates_balanced = HashMap::new();
-
-        // Do some simple round robin
-        let mut counter = 0;
-        let total_peers = peer_and_certificates.len();
-
-        // try to distribute the load in a very naive round robin fashion
-        // more sophisticated algorithm can be chosen later
-        for block_id in block_ids {
-
-            match peer_and_certificates.get(counter) {
-                None => {
-                    // should exist!
-                }
-                Some(entry) => {
-                    let e = entry.clone();
-                    let peer = e.0;
-                    let certificates = e.1;
-
-                    // if certificate is found, insert on the bucket
-                    if let Some(certificate) = certificates.iter().find(|item|item.digest().eq(&block_id)) {
-                        certificates_balanced.insert(peer, certificate);
-                    }
-                }
-            }
-
-            // round robin
-            counter = (counter + 1) % total_peers;
-        }*/
-
-        // remove the request
+        // Important step to do that first, so we give the opportunity
+        // to other future requests (with same set of ids) making a request.
         self.map_certificate_responses_senders.remove(&request_id);
 
+        // Rebalance the certificates to ensure that
+        // those are uniquely distributed across the peers.
+        peers.rebalance_certificates();
+
         // naively sync the batches for all the certificates for each peer
-        for entry in certificates_by_peer {
-            let peer = entry.0;
-            let certificates = entry.1;
-
-            // split batches by worker
-            let batches_by_worker = Self::map_batches_by_worker(certificates.as_slice());
-
-            // find the worker addresses
-            for (worker_id, batch_ids) in batches_by_worker {
-                // send the batches to each worker id
-                let worker_address = self
-                    .committee
-                    .worker(&self.name, &worker_id)
-                    .expect("Worker id not found")
-                    .primary_to_worker;
-
-                // send the network request to each of them
-                let message = PrimaryWorkerMessage::Synchronize(batch_ids, peer.clone());
-                let bytes =
-                    bincode::serialize(&message).expect("Failed to serialize batch sync request");
-                self.network.send(worker_address, Bytes::from(bytes)).await;
-            }
+        for (_, peer) in peers.peers.iter() {
+            self.send_synchronize_batches_requests(peer.clone().name, peer.assigned_certificates())
+                .await
         }
 
-        // wait for the batches to sync
-        let mut futures = Vec::new();
-        for (_, certificate) in certificates_by_id {
-            let fut =
-                Self::wait_for_block_batches(request_id, self.payload_store.clone(), certificate);
-            futures.push(fut.boxed());
-        }
+        peers
+            .unique_certificates()
+            .into_iter()
+            .map(|certificate| {
+                Self::wait_for_block_batches(request_id, self.payload_store.clone(), certificate)
+                    .boxed()
+            })
+            .collect()
+    }
 
-        futures
+    /// This method sends the necessary requests to the worker nodes to
+    /// synchronize the missing batches. The batches will be synchronized
+    /// from the dictated primary_peer_name.
+    ///
+    /// # Arguments
+    ///
+    /// * `primary_peer_name` - The primary from which we are looking to sync the batches.
+    /// * `certificates` - The certificates for which we want to sync their batches.
+    async fn send_synchronize_batches_requests(
+        &mut self,
+        primary_peer_name: PublicKey,
+        certificates: Vec<Certificate<PublicKey>>,
+    ) {
+        let batches_by_worker = utils::map_certificate_batches_by_worker(certificates.as_slice());
+
+        for (worker_id, batch_ids) in batches_by_worker {
+            let worker_address = self
+                .committee
+                .worker(&self.name, &worker_id)
+                .expect("Worker id not found")
+                .primary_to_worker;
+
+            let message = PrimaryWorkerMessage::Synchronize(batch_ids, primary_peer_name.clone());
+            let bytes =
+                bincode::serialize(&message).expect("Failed to serialize batch sync request");
+            self.network.send(worker_address, Bytes::from(bytes)).await;
+        }
     }
 
     async fn wait_for_block_batches<'a>(
@@ -522,52 +499,37 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         num_of_requests_sent: u32,
         mut receiver: Receiver<CertificatesResponse<PublicKey>>,
     ) -> StateCommand<PublicKey> {
-        // map the peers (name) with their certificate responses
-        let mut certificates_by_peer: HashMap<PublicKey, Vec<Certificate<PublicKey>>> =
-            HashMap::new();
-
-        // keep track of the found certificates
-        // map the certificate digests and peers who have them available
-        let mut found_certificates: HashMap<CertificateDigest, Certificate<PublicKey>> =
-            HashMap::new();
-
         let total_expected_certificates = block_ids.len();
-        let mut num_of_responses = 0;
-
-        // we want at least the (floor) 50% of responses to be received so we have enough
-        // nodes to load balance the follow up sync requests to. We can change this
-        // and even make mandatory to wait until all responses have been received (with timeout).
-        let requests_majority = (num_of_requests_sent as f32 / 2.0).ceil() as u32;
+        let mut num_of_responses: f32 = 0.0;
 
         let timer = sleep(TIMEOUT_FETCH_CERTIFICATES);
         tokio::pin!(timer);
 
+        let mut peers = Peers::<PublicKey>::new();
+
         loop {
             tokio::select! {
                 Some(response) = receiver.recv() => {
-                    if certificates_by_peer.contains_key(&response.from) {
+                    if peers.contains_peer(&response.from) {
                         // skip , we already got an answer from this peer
                         continue;
                     }
 
-                    num_of_responses += 1;
+                    num_of_responses += 1.0;
 
                     match response.clone().validate_certificates(&committee) {
                         Ok(certificates) => {
-                            certificates.iter().for_each(|c| {
-                                found_certificates.insert(c.digest(), c.clone());
-                            });
+                            // add them as a new peer
+                            peers.add_peer(response.from.clone(), certificates);
 
-                            certificates_by_peer.insert(response.from.clone(), certificates);
+                            let requests_received_ratio = ((num_of_responses / num_of_requests_sent as f32) * 100.0).round();
 
-                            if found_certificates.len() == total_expected_certificates &&
-                            num_of_responses >= requests_majority
+                            if peers.unique_certificates().len() == total_expected_certificates &&
+                            requests_received_ratio >= CERTIFICATE_RESPONSES_RATIO_THRESHOLD
                             {
-                                // hey! have them all - break now and go to next state
                                 return StateCommand::SynchronizeBatches {
                                 request_id,
-                                certificates_by_peer,
-                                certificates_by_id: found_certificates,
+                                peers
                                 };
                             }
                         },
@@ -578,11 +540,11 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                 },
                 () = &mut timer => {
                     // We did time out, but we have managed to gather all the desired certificates
-                    if found_certificates.len() == total_expected_certificates {
+                    if peers.unique_certificates().len() == total_expected_certificates {
                         return StateCommand::SynchronizeBatches {
                             request_id,
-                            certificates_by_peer,
-                        certificates_by_id: found_certificates};
+                            peers
+                        };
                     }
                     // or timeout - oh we haven't managed to fetch the certificates in time!
                     return StateCommand::TimeoutWaitingCertificates { request_id, block_ids };
@@ -590,22 +552,180 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
             }
         }
     }
+}
 
-    // a helper method that collects all the batches from each certificate and maps
-    // them by the worker id.
-    fn map_batches_by_worker(
-        certificates: &[Certificate<PublicKey>],
-    ) -> HashMap<WorkerId, Vec<BatchDigest>> {
-        let mut batches_by_worker: HashMap<WorkerId, Vec<BatchDigest>> = HashMap::new();
-        for certificate in certificates.iter() {
-            for (batch_id, worker_id) in &certificate.header.payload {
-                batches_by_worker
-                    .entry(*worker_id)
-                    .or_insert_with(Vec::new)
-                    .push(*batch_id);
-            }
+#[derive(Clone)]
+struct Peer<PublicKey: VerifyingKey> {
+    name: PublicKey,
+    certificates_able_to_serve: HashMap<CertificateDigest, Certificate<PublicKey>>,
+    assigned_certificates: HashMap<CertificateDigest, Certificate<PublicKey>>,
+}
+
+impl<PublicKey: VerifyingKey> Peer<PublicKey> {
+    fn new(name: PublicKey, certificates_able_to_serve: Vec<Certificate<PublicKey>>) -> Self {
+        let certs: HashMap<CertificateDigest, Certificate<PublicKey>> = certificates_able_to_serve
+            .into_iter()
+            .map(|c| (c.digest(), c))
+            .collect();
+
+        Peer {
+            name,
+            certificates_able_to_serve: certs,
+            assigned_certificates: HashMap::new(),
+        }
+    }
+
+    fn assign_certificate(&mut self, certificate: &Certificate<PublicKey>) {
+        self.assigned_certificates
+            .insert(certificate.digest(), certificate.clone());
+    }
+
+    fn assigned_certificates(&self) -> Vec<Certificate<PublicKey>> {
+        self.assigned_certificates
+            .clone()
+            .into_iter()
+            .map(|v| v.1)
+            .collect()
+    }
+}
+
+struct Peers<PublicKey: VerifyingKey> {
+    peers: HashMap<PublicKey, Peer<PublicKey>>,
+    rebalanced: RefCell<bool>,
+}
+
+impl<PublicKey: VerifyingKey> Peers<PublicKey> {
+    fn new() -> Self {
+        Self {
+            peers: HashMap::new(),
+            rebalanced: RefCell::new(false),
+        }
+    }
+
+    fn unique_certificates(&self) -> Vec<Certificate<PublicKey>> {
+        let result: HashMap<CertificateDigest, Certificate<PublicKey>> = self
+            .peers
+            .values()
+            .flat_map(|v| {
+                if *self.rebalanced.borrow() {
+                    v.assigned_certificates.clone()
+                } else {
+                    v.certificates_able_to_serve.clone()
+                }
+            })
+            .collect();
+
+        result.into_iter().map(|(_, c)| c).collect()
+    }
+
+    fn contains_peer(&mut self, name: &PublicKey) -> bool {
+        self.peers.contains_key(name)
+    }
+
+    fn add_peer(&mut self, name: PublicKey, available_certificates: Vec<Certificate<PublicKey>>) {
+        self.peers
+            .insert(name.clone(), Peer::new(name, available_certificates));
+    }
+
+    /// Re-distributes the certificates to the peers in a load balanced manner.
+    /// We expect to have duplicates across the peers. The goal is in the end
+    /// for each peer to have a unique list of certificates and those lists to
+    /// not differ significantly, so we balance the load.
+    /// The method shouldn't be called more than once.
+    fn rebalance_certificates(&mut self) {
+        if *self.rebalanced.borrow() {
+            panic!("rebalance_certificates has been called more than once, this is not allowed");
         }
 
-        batches_by_worker
+        let certificates = self.unique_certificates();
+
+        for certificate in certificates {
+            self.reassign_certificate(certificate);
+        }
+
+        self.rebalanced.replace(true);
+    }
+
+    fn reassign_certificate(&mut self, certificate: Certificate<PublicKey>) {
+        let mut peer = self.peer_to_assign_certificate(&certificate);
+
+        // step 5 - assign the certificate to this peer
+        peer.assign_certificate(&certificate);
+
+        self.peers.insert(peer.clone().name, peer);
+
+        // step 6 - delete the certificate from all the peers where is found
+        self.delete_certificate_from_peers(&certificate);
+    }
+
+    fn peer_to_assign_certificate(
+        &mut self,
+        certificate: &Certificate<PublicKey>,
+    ) -> Peer<PublicKey> {
+        let p = self.ordered_peers_have_certificate(certificate.digest());
+
+        p.get(0)
+            .expect("Expected to have found at least one peer that can serve the certificate")
+            .clone()
+    }
+
+    /// This method will perform two operations:
+    /// 1) Will return only the peers that certificate dictated by the
+    /// provided `certificate_id`
+    /// 2) Will order the peers in ascending order based on their already
+    /// assigned certificates and the ones able to serve.
+    fn ordered_peers_have_certificate(
+        &mut self,
+        certificate_id: CertificateDigest,
+    ) -> Vec<Peer<PublicKey>> {
+        // step 1 - find the peers who have this id
+        let mut peers_with_certificate: Vec<Peer<PublicKey>> = self
+            .peers
+            .iter()
+            .filter(|p| p.1.certificates_able_to_serve.contains_key(&certificate_id))
+            .map(|p| p.1.clone())
+            .collect();
+
+        peers_with_certificate.sort_by(|a, b| {
+            // step 2 - order the peers in ascending order based on the number of
+            // certificates they have been assigned + able to serve. We want to
+            // prioritise those that have the smallest set of those.
+            let a_size = a.assigned_certificates.len() + a.certificates_able_to_serve.len();
+            let b_size = b.assigned_certificates.len() + b.certificates_able_to_serve.len();
+
+            // if equal in size, compare on the assigned_certificates.
+            // We want to prioritise then ones that have less already
+            // assigned certificates so we give them the chance to start
+            // getting some.
+            if a_size == b_size {
+                return if a.assigned_certificates.len() > b.assigned_certificates.len() {
+                    Ordering::Greater
+                } else if a.assigned_certificates.len() < b.assigned_certificates.len(){
+                    Ordering::Less
+                } else {
+                    // In case they are absolutely equal, we prioritise the one whose
+                    // name is "less than" the other. This isn't really necessary, but
+                    // it gives us some determinism.
+                    if a.name.lt(&b.name) {
+                        return Ordering::Less;
+                    }
+                    Ordering::Greater
+                };
+            } else if a_size > b_size {
+                return Ordering::Greater;
+            }
+            Ordering::Less
+        });
+
+        peers_with_certificate
+    }
+
+    // Deletes the provided certificate from the list of available
+    // certificates from all the peers.
+    fn delete_certificate_from_peers(&mut self, certificate: &Certificate<PublicKey>) {
+        for (_, peer) in self.peers.iter_mut() {
+            peer.certificates_able_to_serve
+                .remove(&certificate.digest());
+        }
     }
 }
