@@ -1,6 +1,6 @@
 use crate::{
     block_synchronizer::{
-        BlockSynchronizer, CertificatesResponse, Command, RequestID, StateCommand,
+        BlockSynchronizer, CertificatesResponse, Command, RequestID, StateCommand, SyncError,
     },
     common::{
         certificate, create_db_stores, fixture_batch_with_transactions, fixture_header_builder,
@@ -15,7 +15,11 @@ use crypto::{ed25519::Ed25519PublicKey, traits::VerifyingKey, Hash};
 use ed25519_dalek::Signer;
 use futures::{future::try_join_all, stream::FuturesUnordered, StreamExt};
 use network::SimpleSender;
-use std::{collections::HashMap, net::SocketAddr, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    net::SocketAddr,
+    time::Duration,
+};
 use store::Store;
 use tokio::{
     net::TcpListener,
@@ -143,9 +147,6 @@ async fn test_successful_block_synchronization() {
 #[tokio::test]
 async fn test_await_for_certificate_responses_from_majority() {
     // GIVEN
-    // let (_, _, payload_store) = create_db_stores();
-
-    // AND the necessary keys
     let (name, committee) = resolve_name_and_committee(13001);
 
     let (tx_certificate_responses, rx_certificate_responses) = channel(10);
@@ -227,6 +228,89 @@ async fn test_await_for_certificate_responses_from_majority() {
         }
         _ => {
             panic!("Expected to receive a successful synchronize batches command");
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_timeout_while_waiting_for_certificates() {
+    // GIVEN
+    let (_, _, payload_store) = create_db_stores();
+
+    // AND the necessary keys
+    let (name, committee) = resolve_name_and_committee(13001);
+    let key = keys().pop().unwrap();
+
+    let (tx_commands, rx_commands) = channel(10);
+    let (_, rx_certificate_responses) = channel(10);
+
+    // AND some random block ids
+    let block_ids: Vec<CertificateDigest> = (0..10)
+        .into_iter()
+        .map(|_| {
+            let header = fixture_header_builder()
+                .with_payload_batch(fixture_batch_with_transactions(10), 0)
+                .build(|payload| key.sign(payload));
+
+            certificate(&header).digest()
+        })
+        .collect();
+
+    // AND create the synchronizer
+    BlockSynchronizer::spawn(
+        name.clone(),
+        committee.clone(),
+        rx_commands,
+        rx_certificate_responses,
+        SimpleSender::new(),
+        payload_store.clone(),
+    );
+
+    // AND the channel to respond to
+    let (tx_synchronize, mut rx_synchronize) = channel(10);
+
+    // WHEN
+    tx_commands
+        .send(Command::SynchroniseBlocks {
+            block_ids: block_ids.clone(),
+            respond_to: tx_synchronize,
+        })
+        .await
+        .ok()
+        .unwrap();
+
+    // THEN
+    let timer = sleep(Duration::from_millis(5_000));
+    tokio::pin!(timer);
+
+    let mut total_results_received = 0;
+
+    let mut block_ids_seen: HashSet<CertificateDigest> = HashSet::new();
+
+    loop {
+        tokio::select! {
+            Some(result) = rx_synchronize.recv() => {
+                assert!(result.is_err(), "Expected error result, instead received: {:?}", result.unwrap());
+
+                match result.err().unwrap() {
+                    SyncError::Timeout { block_id } => {
+                        // ensure the results are unique and within the expected set
+                        assert!(block_ids_seen.insert(block_id), "Already received response for this block id - this shouldn't happen");
+                        assert!(block_ids.iter().any(|d|d.eq(&block_id)), "Received not expected block id");
+                    },
+                    err => panic!("Didn't expect this sync error: {:?}", err)
+                }
+
+                total_results_received += 1;
+
+                // received all expected results, now break
+                if total_results_received == block_ids.as_slice().len() {
+                    break;
+                }
+            },
+            () = &mut timer => {
+                panic!("Timeout, no result has been received in time")
+            }
         }
     }
 }

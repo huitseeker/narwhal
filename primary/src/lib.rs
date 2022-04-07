@@ -15,6 +15,7 @@ extern crate derive_builder;
 mod error;
 mod aggregators;
 mod block_remover;
+mod block_synchronizer;
 mod block_waiter;
 mod certificate_waiter;
 mod core;
@@ -26,12 +27,11 @@ mod payload_receiver;
 mod primary;
 mod proposer;
 mod synchronizer;
+mod utils;
 
-mod block_synchronizer;
 #[cfg(test)]
 #[path = "tests/common.rs"]
 mod common;
-mod utils;
 
 pub use crate::{
     block_remover::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage},
