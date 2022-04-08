@@ -408,7 +408,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         // those are uniquely distributed across the peers.
         peers.rebalance_values();
 
-        for (_, peer) in peers.peers.iter() {
+        for (_, peer) in peers.peers().iter() {
             self.send_synchronize_batches_requests(peer.clone().name, peer.assigned_values())
                 .await
         }

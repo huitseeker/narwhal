@@ -210,10 +210,10 @@ async fn test_await_for_certificate_responses_from_majority() {
 
             // we expect to have "exited" when 2 responses have been received
             // since this is the 50% of the total of peers.
-            assert_eq!(peers.peers.len(), 2);
+            assert_eq!(peers.peers().len(), 2);
 
             // ensure that each peer has the requested certificates
-            for (_, peer) in peers.peers {
+            for (_, peer) in peers.peers() {
                 assert_eq!(
                     peer.values_able_to_serve.len(),
                     certificates.len(),

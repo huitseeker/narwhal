@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crypto::{traits::VerifyingKey, Hash};
-use std::{cell::RefCell, cmp::Ordering, collections::HashMap};
+use std::{cmp::Ordering, collections::HashMap};
 
 #[derive(Clone)]
 pub struct Peer<PublicKey: VerifyingKey, Value: Hash + Clone> {
@@ -46,16 +46,20 @@ impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peer<PublicKey, Value> {
 /// A helper structure to allow us store the peer result values
 /// and redistribute the common ones between them evenly.
 pub struct Peers<PublicKey: VerifyingKey, Value: Hash + Clone> {
-    pub peers: HashMap<PublicKey, Peer<PublicKey, Value>>,
-    rebalanced: RefCell<bool>,
+    peers: HashMap<PublicKey, Peer<PublicKey, Value>>,
+    rebalanced: bool,
 }
 
 impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peers<PublicKey, Value> {
     pub fn new() -> Self {
         Self {
             peers: HashMap::new(),
-            rebalanced: RefCell::new(false),
+            rebalanced: false,
         }
+    }
+
+    pub fn peers(&self) -> HashMap<PublicKey, Peer<PublicKey, Value>> {
+        self.peers.to_owned()
     }
 
     /// Iterates over all the peer responses and retrieves the unique
@@ -65,7 +69,7 @@ impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peers<PublicKey, Value> {
             .peers
             .values()
             .flat_map(|v| {
-                if *self.rebalanced.borrow() {
+                if self.rebalanced {
                     v.assigned_values.clone()
                 } else {
                     v.values_able_to_serve.clone()
@@ -101,7 +105,7 @@ impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peers<PublicKey, Value> {
             self.reassign_value(v);
         }
 
-        self.rebalanced.replace(true);
+        self.rebalanced = true;
     }
 
     fn reassign_value(&mut self, value: Value) {
@@ -182,7 +186,7 @@ impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peers<PublicKey, Value> {
     }
 
     fn ensure_not_rebalanced(&mut self) {
-        if *self.rebalanced.borrow() {
+        if self.rebalanced {
             panic!("rebalance has been called, this operation is not allowed");
         }
     }
@@ -263,7 +267,7 @@ mod tests {
             // The certificates should be balanced to the peers.
             let mut seen_certificates = HashSet::new();
 
-            for (_, peer) in peers.peers {
+            for (_, peer) in peers.peers() {
                 // we want to ensure that a peer has got at least a certificate
                 assert_ne!(
                     peer.assigned_values().len(),
@@ -361,12 +365,12 @@ mod tests {
             peers.rebalance_values();
 
             // THEN
-            assert_eq!(peers.peers.len() as u8, test.num_of_peers);
+            assert_eq!(peers.peers().len() as u8, test.num_of_peers);
 
             // The certificates should be balanced to the peers.
             let mut seen_certificates = HashSet::new();
 
-            for (_, peer) in peers.peers {
+            for (_, peer) in peers.peers() {
                 // we want to ensure that a peer has got at least a certificate
                 let peer_certs = mock_certificates_by_peer.get(&peer.name).unwrap();
                 assert_eq!(
