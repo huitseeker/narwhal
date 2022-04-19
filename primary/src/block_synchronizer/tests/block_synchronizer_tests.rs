@@ -195,7 +195,7 @@ async fn test_await_for_certificate_responses_from_majority() {
             .unwrap();
     }
 
-    let result = BlockSynchronizer::await_for_certificate_responses(
+    let result = BlockSynchronizer::wait_for_certificate_responses(
         request_id,
         committee.clone(),
         block_ids,

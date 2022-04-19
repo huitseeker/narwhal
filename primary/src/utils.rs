@@ -18,7 +18,7 @@ where
         for (batch_id, worker_id) in &certificate.header.payload {
             batches_by_worker
                 .entry(*worker_id)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(*batch_id);
         }
     }

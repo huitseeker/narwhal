@@ -1,6 +1,5 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(dead_code)]
 use crate::{
     block_synchronizer::peers::Peers, primary::PrimaryMessage, utils, BatchDigest, Certificate,
     CertificateDigest, PayloadToken, PrimaryWorkerMessage,
@@ -29,12 +28,13 @@ use tracing::log::{debug, error, warn};
 mod block_synchronizer_tests;
 mod peers;
 
-const SYNCHRONIZE_EXPIRATION_THRESHOLD: Duration = Duration::from_secs(2);
 const TIMEOUT_SYNCHRONIZING_BATCHES: Duration = Duration::from_secs(2);
 const TIMEOUT_FETCH_CERTIFICATES: Duration = Duration::from_secs(2);
 
-/// The minimum percentage of responses that should be received when requesting
-/// the certificates from peers in order to procceed to next state.
+/// The minimum percentage
+/// (number of responses received from primary nodes / number of requests sent to primary nodes)
+/// that should be reached when requesting the certificates from peers in order to
+/// proceed to next state.
 const CERTIFICATE_RESPONSES_RATIO_THRESHOLD: f32 = 0.5;
 
 type ResultSender<T> = Sender<BlockSynchronizeResult<Certificate<T>>>;
@@ -86,11 +86,14 @@ impl<PublicKey: VerifyingKey> CertificatesResponse<PublicKey> {
     /// Even if one found certificate is not valid, an error is returned. Otherwise
     /// and Ok result is returned with (any) found certificates.
     fn validate_certificates(
-        self,
+        &self,
         committee: &Committee<PublicKey>,
-    ) -> Result<Vec<Certificate<PublicKey>>, ()> {
-        let peer_found_certs: Vec<Certificate<PublicKey>> =
-            self.certificates.into_iter().filter_map(|e| e.1).collect();
+    ) -> Result<Vec<Certificate<PublicKey>>, CertificatesResponseError<PublicKey>> {
+        let peer_found_certs: Vec<Certificate<PublicKey>> = self
+            .certificates
+            .iter()
+            .filter_map(|e| e.1.clone())
+            .collect();
 
         if peer_found_certs.as_slice().is_empty() {
             // no certificates found, skip
@@ -101,20 +104,36 @@ impl<PublicKey: VerifyingKey> CertificatesResponse<PublicKey> {
             return Ok(vec![]);
         }
 
-        if peer_found_certs
-            .iter()
-            .any(|c| c.verify(committee).is_err())
-        {
+        let invalid_certificates: Vec<Certificate<PublicKey>> = peer_found_certs
+            .clone()
+            .into_iter()
+            .filter(|c| c.verify(committee).is_err())
+            .collect();
+
+        if !invalid_certificates.is_empty() {
             error!("Found at least one invalid certificate from peer {:?}. Will ignore all certificates", self.from);
 
-            return Err(());
+            return Err(CertificatesResponseError::ValidationError {
+                name: self.from.clone(),
+                invalid_certificates,
+            });
         }
 
         Ok(peer_found_certs)
     }
 }
 
+#[derive(Debug, Error, Clone, PartialEq)]
+pub enum CertificatesResponseError<PublicKey: VerifyingKey> {
+    #[error("Found invalid certificates form peer {name} - potentially Byzantine.")]
+    ValidationError {
+        name: PublicKey,
+        invalid_certificates: Vec<Certificate<PublicKey>>,
+    },
+}
+
 pub enum Command<PublicKey: VerifyingKey> {
+    #[allow(dead_code)]
     SynchroniseBlocks {
         block_ids: Vec<CertificateDigest>,
         /// The channel to send the results to
@@ -146,9 +165,6 @@ enum StateCommand<PublicKey: VerifyingKey> {
 
 #[derive(Debug, Error)]
 pub enum SyncError {
-    #[error("Block with id {block_id} has not been found even though tried to fetch from peers")]
-    NotFound { block_id: CertificateDigest },
-
     #[error("Block with id {block_id} could not be retrieved")]
     Error { block_id: CertificateDigest },
 
@@ -157,9 +173,9 @@ pub enum SyncError {
 }
 
 impl SyncError {
+    #[allow(dead_code)]
     pub fn block_id(self) -> CertificateDigest {
         match self {
-            SyncError::NotFound { block_id } => block_id,
             SyncError::Error { block_id } => block_id,
             SyncError::Timeout { block_id } => block_id,
         }
@@ -188,6 +204,7 @@ pub struct BlockSynchronizer<PublicKey: VerifyingKey> {
     /// Send network requests
     network: SimpleSender,
 
+    /// The persistent storage for payload markers from workers
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
 }
 
@@ -249,7 +266,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                             self.handle_timeout_waiting_certificates(request_id, block_ids).await;
                         },
                         StateCommand::BlockSynchronized { request_id, certificate } => {
-                            println!("Successfully synchronised the batches of the certificate! {} for request id {:?}", certificate.clone().digest(), request_id);
+                            println!("Successfully synchronised the batches of the certificate! {} for request id {:?}", certificate.digest(), request_id);
 
                             let get_result = || -> BlockSynchronizeResult<Certificate<PublicKey>> {
                                 Ok(certificate.clone())
@@ -258,10 +275,10 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                             self.handle_synchronize_block_result(certificate.digest(), get_result).await;
                         },
                         StateCommand::ErrorSynchronizingBatchesForBlock { request_id, certificate } => {
-                            println!("Error synchronising batches {:?} for request id {:?}", certificate.clone(), request_id);
+                            println!("Error synchronising batches {:?} for request id {:?}", certificate.header.payload, request_id);
 
                             let get_result = || -> BlockSynchronizeResult<Certificate<PublicKey>> {
-                                Err(SyncError::Error { block_id: certificate.clone().digest() })
+                                Err(SyncError::Error { block_id: certificate.digest() })
                             };
 
                             self.handle_synchronize_block_result(certificate.digest(), get_result).await;
@@ -352,7 +369,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
 
         // now create the future that will wait to gather the responses
         Some(
-            Self::await_for_certificate_responses(
+            Self::wait_for_certificate_responses(
                 key,
                 self.committee.clone(),
                 block_ids,
@@ -457,11 +474,12 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         certificate: Certificate<PublicKey>,
     ) -> StateCommand<PublicKey> {
-        let mut futures = Vec::new();
-
-        for item in certificate.clone().header.payload {
-            futures.push(payload_store.notify_read(item));
-        }
+        let futures = certificate
+            .header
+            .payload
+            .iter()
+            .map(|(batch_digest, worker_id)| payload_store.notify_read((*batch_digest, *worker_id)))
+            .collect::<Vec<_>>();
 
         // Wait for all the items to sync - have a timeout
         let result = timeout(TIMEOUT_SYNCHRONIZING_BATCHES, join_all(futures)).await;
@@ -486,11 +504,9 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     async fn handle_certificates_response(&mut self, response: CertificatesResponse<PublicKey>) {
         let sender = self
             .map_certificate_responses_senders
-            .get_mut(&response.clone().request_id());
+            .get(&response.clone().request_id());
 
-        if sender.is_some() {
-            let s = sender.unwrap();
-
+        if let Some(s) = sender {
             if let Err(e) = s.send(response).await {
                 error!("Could not send the response to the sender {:?}", e);
             }
@@ -499,7 +515,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         }
     }
 
-    async fn await_for_certificate_responses(
+    async fn wait_for_certificate_responses(
         request_id: RequestID,
         committee: Committee<PublicKey>,
         block_ids: Vec<CertificateDigest>,
@@ -507,8 +523,8 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         mut receiver: Receiver<CertificatesResponse<PublicKey>>,
     ) -> StateCommand<PublicKey> {
         let total_expected_certificates = block_ids.len();
-        let mut num_of_responses: f32 = 0.0;
-        let num_of_requests_sent: f32 = primaries_sent_requests_to.len() as f32;
+        let mut num_of_responses: u32 = 0;
+        let num_of_requests_sent: u32 = primaries_sent_requests_to.len() as u32;
 
         let timer = sleep(TIMEOUT_FETCH_CERTIFICATES);
         tokio::pin!(timer);
@@ -531,9 +547,9 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                         continue;
                     }
 
-                    num_of_responses += 1.0;
+                    num_of_responses += 1;
 
-                    match response.clone().validate_certificates(&committee) {
+                    match response.validate_certificates(&committee) {
                         Ok(certificates) => {
                             // Ensure we got responses for the certificates we asked for.
                             // Even if we have found one certificate that doesn't match
@@ -554,7 +570,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                                 };
                             }
                         },
-                        Err(()) => {
+                        Err(_) => {
                             warn!("Got invalid certificates from peer");
                         }
                     }
@@ -574,8 +590,9 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         }
     }
 
-    fn reached_response_ratio(num_of_responses: f32, num_of_expected_responses: f32) -> bool {
-        let ratio: f32 = ((num_of_responses / num_of_expected_responses) * 100.0).round();
+    fn reached_response_ratio(num_of_responses: u32, num_of_expected_responses: u32) -> bool {
+        let ratio: f32 =
+            ((num_of_responses as f32 / num_of_expected_responses as f32) * 100.0).round();
         ratio >= CERTIFICATE_RESPONSES_RATIO_THRESHOLD * 100.0
     }
 }

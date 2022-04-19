@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     block_remover::DeleteBatchResult,
+    block_synchronizer::BlockSynchronizer,
     block_waiter::{BatchMessage, BatchMessageError, BatchResult, BlockWaiter},
     certificate_waiter::CertificateWaiter,
     core::Core,
@@ -134,6 +135,9 @@ impl Primary {
         // to remove collections from Narwhal (e.x the remove_collections endpoint).
         let (_tx_block_removal_commands, rx_block_removal_commands) = channel(CHANNEL_CAPACITY);
         let (tx_batch_removal, rx_batch_removal) = channel(CHANNEL_CAPACITY);
+        let (_tx_block_synchronizer_commands, rx_block_synchronizer_commands) =
+            channel(CHANNEL_CAPACITY);
+        let (_tx_certificate_responses, rx_certificate_responses) = channel(CHANNEL_CAPACITY);
 
         // Write the parameters to the logs.
         parameters.tracing();
@@ -244,6 +248,17 @@ impl Primary {
             SimpleSender::new(),
             rx_block_removal_commands,
             rx_batch_removal,
+        );
+
+        // Responsible for finding missing blocks (certificates) and fetching
+        // them from the primary peers by synchronizing also their batches.
+        BlockSynchronizer::spawn(
+            name.clone(),
+            committee.clone(),
+            rx_block_synchronizer_commands,
+            rx_certificate_responses,
+            SimpleSender::new(),
+            payload_store.clone(),
         );
 
         // Whenever the `Synchronizer` does not manage to validate a header due to missing parent certificates of
