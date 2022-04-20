@@ -259,6 +259,7 @@ impl Primary {
             rx_certificate_responses,
             SimpleSender::new(),
             payload_store.clone(),
+            parameters.block_synchronizer,
         );
 
         // Whenever the `Synchronizer` does not manage to validate a header due to missing parent certificates of

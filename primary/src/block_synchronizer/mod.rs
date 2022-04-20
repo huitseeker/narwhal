@@ -6,7 +6,7 @@ use crate::{
 };
 use blake2::digest::Update;
 use bytes::Bytes;
-use config::{Committee, WorkerId};
+use config::{BlockSynchronizerParameters, Committee, WorkerId};
 use crypto::{traits::VerifyingKey, Digest, Hash};
 use futures::{
     future::{join_all, BoxFuture},
@@ -32,9 +32,6 @@ use tracing::log::{debug, error, warn};
 #[path = "tests/block_synchronizer_tests.rs"]
 mod block_synchronizer_tests;
 mod peers;
-
-const TIMEOUT_SYNCHRONIZING_BATCHES: Duration = Duration::from_secs(2);
-const TIMEOUT_FETCH_CERTIFICATES: Duration = Duration::from_secs(2);
 
 /// The minimum percentage
 /// (number of responses received from primary nodes / number of requests sent to primary nodes)
@@ -217,6 +214,12 @@ pub struct BlockSynchronizer<PublicKey: VerifyingKey> {
 
     /// The persistent storage for payload markers from workers
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+
+    /// Timeout when fetching the certificates
+    fetch_certificates_timeout: Duration,
+
+    /// Timeout when synchronizing batches
+    synchronizing_batches_timeout: Duration,
 }
 
 impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
@@ -227,6 +230,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         rx_certificate_responses: Receiver<CertificatesResponse<PublicKey>>,
         network: SimpleSender,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+        parameters: BlockSynchronizerParameters,
     ) {
         tokio::spawn(async move {
             Self {
@@ -238,6 +242,12 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                 map_certificate_responses_senders: HashMap::new(),
                 network,
                 payload_store,
+                fetch_certificates_timeout: Duration::from_millis(
+                    parameters.fetch_certificates_timeout_ms,
+                ),
+                synchronizing_batches_timeout: Duration::from_millis(
+                    parameters.synchronizing_batches_timeout_ms,
+                ),
             }
             .run()
             .await;
@@ -381,6 +391,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         // now create the future that will wait to gather the responses
         Some(
             Self::wait_for_certificate_responses(
+                self.fetch_certificates_timeout,
                 key,
                 self.committee.clone(),
                 to_sync,
@@ -445,8 +456,13 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
             .unique_values()
             .into_iter()
             .map(|certificate| {
-                Self::wait_for_block_batches(request_id, self.payload_store.clone(), certificate)
-                    .boxed()
+                Self::wait_for_block_batches(
+                    self.synchronizing_batches_timeout,
+                    request_id,
+                    self.payload_store.clone(),
+                    certificate,
+                )
+                .boxed()
             })
             .collect()
     }
@@ -481,6 +497,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     }
 
     async fn wait_for_block_batches<'a>(
+        synchronizing_batches_timeout: Duration,
         request_id: RequestID,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         certificate: Certificate<PublicKey>,
@@ -493,7 +510,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
             .collect::<Vec<_>>();
 
         // Wait for all the items to sync - have a timeout
-        let result = timeout(TIMEOUT_SYNCHRONIZING_BATCHES, join_all(futures)).await;
+        let result = timeout(synchronizing_batches_timeout, join_all(futures)).await;
         if result.is_err()
             || result
                 .unwrap()
@@ -527,6 +544,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     }
 
     async fn wait_for_certificate_responses(
+        fetch_certificates_timeout: Duration,
         request_id: RequestID,
         committee: Committee<PublicKey>,
         block_ids: Vec<CertificateDigest>,
@@ -537,7 +555,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         let mut num_of_responses: u32 = 0;
         let num_of_requests_sent: u32 = primaries_sent_requests_to.len() as u32;
 
-        let timer = sleep(TIMEOUT_FETCH_CERTIFICATES);
+        let timer = sleep(fetch_certificates_timeout);
         tokio::pin!(timer);
 
         let mut peers = Peers::<PublicKey, Certificate<PublicKey>>::new(SmallRng::from_entropy());

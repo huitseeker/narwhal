@@ -12,7 +12,7 @@ use crate::{
     BatchDigest, Certificate, CertificateDigest, PayloadToken,
 };
 use bincode::deserialize;
-use config::WorkerId;
+use config::{BlockSynchronizerParameters, WorkerId};
 use crypto::{ed25519::Ed25519PublicKey, traits::VerifyingKey, Hash};
 use ed25519_dalek::Signer;
 use futures::{future::try_join_all, stream::FuturesUnordered, StreamExt};
@@ -74,6 +74,7 @@ async fn test_successful_block_synchronization() {
         rx_certificate_responses,
         SimpleSender::new(),
         payload_store.clone(),
+        BlockSynchronizerParameters::default(),
     );
 
     // AND the channel to respond to
@@ -196,6 +197,7 @@ async fn test_await_for_certificate_responses_from_majority() {
     }
 
     let result = BlockSynchronizer::wait_for_certificate_responses(
+        Duration::from_millis(2_000),
         request_id,
         committee.clone(),
         block_ids,
@@ -271,6 +273,8 @@ async fn test_multiple_overlapping_requests() {
         map_certificate_responses_senders: HashMap::new(),
         network: SimpleSender::new(),
         payload_store,
+        fetch_certificates_timeout: Duration::from_millis(2_000),
+        synchronizing_batches_timeout: Duration::from_millis(2_000),
     };
 
     // ResultSender
@@ -371,6 +375,7 @@ async fn test_timeout_while_waiting_for_certificates() {
         rx_certificate_responses,
         SimpleSender::new(),
         payload_store.clone(),
+        BlockSynchronizerParameters::default(),
     );
 
     // AND the channel to respond to
