@@ -1,7 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crypto::{traits::VerifyingKey, Hash};
-use std::{cmp::Ordering, collections::HashMap};
+use rand::{prelude::SliceRandom as _, rngs::SmallRng};
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct Peer<PublicKey: VerifyingKey, Value: Hash + Clone> {
@@ -46,15 +47,23 @@ impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peer<PublicKey, Value> {
 /// A helper structure to allow us store the peer result values
 /// and redistribute the common ones between them evenly.
 pub struct Peers<PublicKey: VerifyingKey, Value: Hash + Clone> {
+    /// A map with all the peers assigned on this pool.
     peers: HashMap<PublicKey, Peer<PublicKey, Value>>,
+
+    /// When true, it means that the values have been assigned to peers and no
+    /// more mutating operations can be applied
     rebalanced: bool,
+
+    /// An rng used to shuffle the list of peers
+    rng: SmallRng,
 }
 
 impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peers<PublicKey, Value> {
-    pub fn new() -> Self {
+    pub fn new(rng: SmallRng) -> Self {
         Self {
             peers: HashMap::new(),
             rebalanced: false,
+            rng,
         }
     }
 
@@ -111,17 +120,15 @@ impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peers<PublicKey, Value> {
     fn reassign_value(&mut self, value: Value) {
         let mut peer = self.peer_to_assign_value(&value);
 
-        // step 5 - assign the value to this peer
         peer.assign_values(&value);
 
         self.peers.insert(peer.clone().name, peer);
 
-        // step 6 - delete the values from all the peers where is found
         self.delete_values_from_peers(&value);
     }
 
     fn peer_to_assign_value(&mut self, value: &Value) -> Peer<PublicKey, Value> {
-        let mut p = self.ordered_peers_have_value(value.digest());
+        let mut p = self.peers_have_value_shuffled(value.digest());
 
         p.get_mut(0)
             .expect("Expected to have found at least one peer that can serve the value")
@@ -131,11 +138,8 @@ impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peers<PublicKey, Value> {
     /// This method will perform two operations:
     /// 1) Will return only the peers that value dictated by the
     /// provided `value_id`
-    /// 2) Will order the peers in ascending order based on their already
-    /// assigned values and the ones able to serve. On the position 0 of
-    /// the returned result we'll expect to find the peer with the next
-    /// value to be assigned.
-    fn ordered_peers_have_value(
+    /// 2) Will shuffle the peers so the are ordered randomly
+    fn peers_have_value_shuffled(
         &mut self,
         value_id: <Value as Hash>::TypedDigest,
     ) -> Vec<Peer<PublicKey, Value>> {
@@ -147,32 +151,11 @@ impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peers<PublicKey, Value> {
             .map(|p| p.1.clone())
             .collect();
 
-        peers_with_value.sort_by(|a, b| {
-            // step 2 - order the peers in ascending order based on the number of
-            // values they have been assigned + able to serve. We want to
-            // prioritise those that have the smallest set of those.
-            let a_size = a.assigned_values.len() + a.values_able_to_serve.len();
-            let b_size = b.assigned_values.len() + b.values_able_to_serve.len();
-
-            // if equal in size, compare on the assigned_values.
-            // We want to prioritise then ones that have less already
-            // assigned values so we give them the chance to start
-            // getting some.
-            match a_size.cmp(&b_size) {
-                Ordering::Equal => {
-                    match a.assigned_values.len().cmp(&b.assigned_values.len()) {
-                        Ordering::Equal => {
-                            // In case they are absolutely equal, we prioritise the one whose
-                            // name is "less than" the other. This isn't really necessary, but
-                            // it gives us some determinism.
-                            a.name.cmp(&b.name)
-                        }
-                        other => other,
-                    }
-                }
-                other => other,
-            }
-        });
+        // step 2 - shuffle the peers so we can later pick one in random.
+        // For now we consider this good enough and we avoid doing any
+        // explicit client-side load balancing as this should be tackled
+        // on the server-side via demand control.
+        peers_with_value.shuffle(&mut self.rng);
 
         peers_with_value
     }
@@ -201,7 +184,10 @@ mod tests {
         traits::KeyPair,
         Digest, Hash, DIGEST_LEN,
     };
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand::{
+        rngs::{SmallRng, StdRng},
+        SeedableRng,
+    };
     use std::{
         borrow::Borrow,
         collections::{HashMap, HashSet},
@@ -251,7 +237,8 @@ mod tests {
 
             let mut rng = StdRng::from_seed([0; 32]);
 
-            let mut peers = Peers::<Ed25519PublicKey, MockCertificate>::new();
+            let mut peers =
+                Peers::<Ed25519PublicKey, MockCertificate>::new(SmallRng::from_entropy());
 
             for _ in 0..test.num_of_peers {
                 let key_pair = Ed25519KeyPair::generate(&mut rng);
@@ -268,13 +255,6 @@ mod tests {
             let mut seen_certificates = HashSet::new();
 
             for (_, peer) in peers.peers() {
-                // we want to ensure that a peer has got at least a certificate
-                assert_ne!(
-                    peer.assigned_values().len(),
-                    0,
-                    "Expected peer to have been assigned at least 1 certificate"
-                );
-
                 for c in peer.assigned_values() {
                     //println!("Cert for peer {}: {}", peer.name.encode_base64(), c.0);
                     assert!(
@@ -343,7 +323,8 @@ mod tests {
 
             let mut rng = StdRng::from_seed([0; 32]);
 
-            let mut peers = Peers::<Ed25519PublicKey, MockCertificate>::new();
+            let mut peers =
+                Peers::<Ed25519PublicKey, MockCertificate>::new(SmallRng::from_entropy());
 
             for peer_index in 0..test.num_of_peers {
                 let key_pair = Ed25519KeyPair::generate(&mut rng);

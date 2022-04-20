@@ -14,6 +14,7 @@ use futures::{
     FutureExt, StreamExt,
 };
 use network::SimpleSender;
+use rand::{rngs::SmallRng, SeedableRng};
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
@@ -539,7 +540,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         let timer = sleep(TIMEOUT_FETCH_CERTIFICATES);
         tokio::pin!(timer);
 
-        let mut peers = Peers::<PublicKey, Certificate<PublicKey>>::new();
+        let mut peers = Peers::<PublicKey, Certificate<PublicKey>>::new(SmallRng::from_entropy());
 
         loop {
             tokio::select! {
