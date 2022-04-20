@@ -14,7 +14,11 @@ use futures::{
     FutureExt, StreamExt,
 };
 use network::SimpleSender;
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::HashMap,
+    fmt::{Display, Formatter},
+    time::Duration,
+};
 use store::Store;
 use thiserror::Error;
 use tokio::{
@@ -63,6 +67,12 @@ impl From<&[CertificateDigest]> for RequestID {
             .collect();
 
         RequestID::new(&result)
+    }
+}
+
+impl Display for RequestID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", base64::encode(&self.0))
     }
 }
 
@@ -254,7 +264,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                 Some(result) = waiting.next() => {
                     match result {
                         StateCommand::SynchronizeBatches { request_id, peers } => {
-                            println!("Fetched certificates, now synchronizing batches for request id {:?}", request_id);
+                            println!("Fetched certificates, now synchronizing batches for request id {}", request_id);
 
                             let futures = self.handle_synchronize_batches_for_blocks(request_id, peers).await;
                             for fut in futures {
@@ -262,11 +272,11 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                             }
                         },
                         StateCommand::TimeoutWaitingCertificates { request_id, block_ids } => {
-                            println!("Timeout waiting for certificates for {:?} request id {:?}", block_ids, request_id);
+                            println!("Timeout waiting for certificates for {:?} request id {}", block_ids, request_id);
                             self.handle_timeout_waiting_certificates(request_id, block_ids).await;
                         },
                         StateCommand::BlockSynchronized { request_id, certificate } => {
-                            println!("Successfully synchronised the batches of the certificate! {} for request id {:?}", certificate.digest(), request_id);
+                            println!("Successfully synchronised the batches of the certificate! {} for request id {}", certificate.digest(), request_id);
 
                             let get_result = || -> BlockSynchronizeResult<Certificate<PublicKey>> {
                                 Ok(certificate.clone())
@@ -275,7 +285,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                             self.handle_synchronize_block_result(certificate.digest(), get_result).await;
                         },
                         StateCommand::ErrorSynchronizingBatchesForBlock { request_id, certificate } => {
-                            println!("Error synchronising batches {:?} for request id {:?}", certificate.header.payload, request_id);
+                            println!("Error synchronising batches {:?} for request id {}", certificate.header.payload, request_id);
 
                             let get_result = || -> BlockSynchronizeResult<Certificate<PublicKey>> {
                                 Err(SyncError::Error { block_id: certificate.digest() })
@@ -355,11 +365,11 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
             return None;
         }
 
-        let key = RequestID::from(block_ids.as_slice());
+        let key = RequestID::from(to_sync.as_slice());
 
         // broadcast the message to fetch  the certificates
         let primaries = self
-            .broadcast_certificates_batch_request(block_ids.clone())
+            .broadcast_certificates_batch_request(to_sync.clone())
             .await;
 
         let (sender, receiver) = channel(primaries.as_slice().len());
@@ -372,7 +382,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
             Self::wait_for_certificate_responses(
                 key,
                 self.committee.clone(),
-                block_ids,
+                to_sync,
                 primaries,
                 receiver,
             )

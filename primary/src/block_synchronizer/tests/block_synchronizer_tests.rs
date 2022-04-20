@@ -235,6 +235,111 @@ async fn test_await_for_certificate_responses_from_majority() {
 }
 
 #[tokio::test]
+async fn test_multiple_overlapping_requests() {
+    // GIVEN
+    let (_, _, payload_store) = create_db_stores();
+    let (name, committee) = resolve_name_and_committee(13001);
+
+    let (_, rx_commands) = channel(10);
+    let (_, rx_certificate_responses) = channel(10);
+
+    // AND some blocks (certificates)
+    let mut certificates: HashMap<CertificateDigest, Certificate<Ed25519PublicKey>> =
+        HashMap::new();
+
+    let key = keys().pop().unwrap();
+
+    // AND generate headers with distributed batches between 2 workers (0 and 1)
+    for _ in 0..5 {
+        let header = fixture_header_builder()
+            .with_payload_batch(fixture_batch_with_transactions(10), 0)
+            .build(|payload| key.sign(payload));
+
+        let certificate = certificate(&header);
+
+        certificates.insert(certificate.clone().digest(), certificate.clone());
+    }
+
+    let mut block_ids: Vec<CertificateDigest> = certificates.keys().copied().collect();
+
+    let mut block_synchronizer = BlockSynchronizer {
+        name,
+        committee,
+        rx_commands,
+        rx_certificate_responses,
+        pending_block_requests: HashMap::new(),
+        map_certificate_responses_senders: HashMap::new(),
+        network: SimpleSender::new(),
+        payload_store,
+    };
+
+    // ResultSender
+    let get_mock_sender = || {
+        let (tx, _) = channel(10);
+        tx
+    };
+
+    // WHEN
+    let result = block_synchronizer
+        .handle_synchronize_blocks_command(block_ids.clone(), get_mock_sender())
+        .await;
+    assert!(
+        result.is_some(),
+        "Should have created a future to fetch certificates"
+    );
+
+    // THEN
+
+    // ensure that pending values have been updated
+    for digest in block_ids.clone() {
+        assert!(
+            block_synchronizer
+                .pending_block_requests
+                .contains_key(&digest),
+            "Expected to have certificate {} pending to retrieve",
+            digest
+        );
+    }
+
+    // AND that the request is pending for all the block_ids
+    let request_id = RequestID::from(block_ids.as_slice());
+
+    assert!(
+        block_synchronizer
+            .map_certificate_responses_senders
+            .contains_key(&request_id),
+        "Expected to have a request for request id {:?}",
+        &request_id
+    );
+
+    // AND when trying to request same block ids + extra
+    let extra_certificate_id = CertificateDigest::default();
+    block_ids.push(extra_certificate_id);
+    let result = block_synchronizer
+        .handle_synchronize_blocks_command(block_ids, get_mock_sender())
+        .await;
+    assert!(
+        result.is_some(),
+        "Should have created a future to fetch certificates"
+    );
+
+    // THEN only the extra id will be requested
+    assert_eq!(
+        block_synchronizer.map_certificate_responses_senders.len(),
+        2
+    );
+
+    let request_id = RequestID::from(vec![extra_certificate_id].as_slice());
+    assert!(
+        block_synchronizer
+            .map_certificate_responses_senders
+            .contains_key(&request_id),
+        "Expected to have a request for request id {}",
+        &request_id
+    );
+}
+
+#[tokio::test]
 async fn test_timeout_while_waiting_for_certificates() {
     // GIVEN
     let (_, _, payload_store) = create_db_stores();
