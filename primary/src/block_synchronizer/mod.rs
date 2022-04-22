@@ -228,14 +228,14 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                 Some(state) = waiting.next() => {
                     match state {
                         State::HeadersSynchronized { request_id, certificates } => {
-                            println!("Result for the block headers synchronize request id {}", request_id);
+                            debug!("Result for the block headers synchronize request id {}", request_id);
 
                             for (id, result) in certificates {
                                 self.notify_requestors_for_result(Header(id), result).await;
                             }
                         },
                         State::PayloadAvailabilityReceived { request_id, certificates, peers } => {
-                             println!("Result for the block payload synchronize request id {}", request_id);
+                             debug!("Result for the block payload synchronize request id {}", request_id);
 
                             // now try to synchronise the payload only for the ones that have been found
                             let futures = self.handle_synchronize_block_payloads(request_id, peers).await;
@@ -253,7 +253,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                         State::PayloadSynchronized { request_id, result } => {
                             let id = result.clone().map_or_else(|e| e.block_id(), |r| r.digest());
 
-                            println!("Block payload synchronize result received for certificate id {id} for request id {request_id}");
+                            debug!("Block payload synchronize result received for certificate id {id} for request id {request_id}");
 
                             self.notify_requestors_for_result(Payload(id), result).await;
                         },
