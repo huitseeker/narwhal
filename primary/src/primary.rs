@@ -58,6 +58,15 @@ pub enum PrimaryMessage<PublicKey: VerifyingKey> {
     CertificatesBatchResponse {
         certificates: Vec<(CertificateDigest, Option<Certificate<PublicKey>>)>,
     },
+
+    PayloadAvailabilityRequest {
+        certificate_ids: Vec<CertificateDigest>,
+        requestor: PublicKey,
+    },
+
+    PayloadAvailabilityResponse {
+        payload_availability: Vec<(CertificateDigest, bool)>,
+    },
 }
 
 /// The messages sent by the primary to its workers.
@@ -138,6 +147,8 @@ impl Primary {
         let (_tx_block_synchronizer_commands, rx_block_synchronizer_commands) =
             channel(CHANNEL_CAPACITY);
         let (_tx_certificate_responses, rx_certificate_responses) = channel(CHANNEL_CAPACITY);
+        let (_tx_payload_availability_responses, rx_payload_availability_responses) =
+            channel(CHANNEL_CAPACITY);
 
         // Write the parameters to the logs.
         parameters.tracing();
@@ -257,6 +268,7 @@ impl Primary {
             committee.clone(),
             rx_block_synchronizer_commands,
             rx_certificate_responses,
+            rx_payload_availability_responses,
             SimpleSender::new(),
             payload_store.clone(),
             parameters.block_synchronizer,
