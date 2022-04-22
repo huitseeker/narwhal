@@ -1,29 +1,32 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    block_synchronizer::{BlockSynchronizer, CertificatesResponse, Command, RequestID, SyncError},
+    block_synchronizer::{
+        responses::PayloadAvailabilityResponse, BlockSynchronizer, CertificatesResponse, Command,
+        PendingIdentifier, RequestID, SyncError,
+    },
     common::{
         certificate, create_db_stores, fixture_batch_with_transactions, fixture_header_builder,
         keys, resolve_name_and_committee,
     },
     primary::PrimaryMessage,
-    BatchDigest, Certificate, CertificateDigest, PayloadToken,
+    Certificate, CertificateDigest, PrimaryWorkerMessage,
 };
 use bincode::deserialize;
-use config::{BlockSynchronizerParameters, WorkerId};
-use crypto::{ed25519::Ed25519PublicKey, traits::VerifyingKey, Hash};
+use config::BlockSynchronizerParameters;
+use crypto::{ed25519::Ed25519PublicKey, Hash};
 use ed25519_dalek::Signer;
 use futures::{future::try_join_all, stream::FuturesUnordered, StreamExt};
 use network::SimpleSender;
+use serde::de::DeserializeOwned;
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
     time::Duration,
 };
-use store::Store;
 use tokio::{
     net::TcpListener,
-    sync::mpsc::{channel, Sender},
+    sync::mpsc::channel,
     task::JoinHandle,
     time::{sleep, timeout},
 };
@@ -31,12 +34,12 @@ use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::log::debug;
 
 #[tokio::test]
-async fn test_successful_block_synchronization() {
+async fn test_successful_headers_synchronization() {
     // GIVEN
     let (_, _, payload_store) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(13001);
+    let (name, committee) = resolve_name_and_committee(13100);
 
     let (tx_commands, rx_commands) = channel(10);
     let (tx_certificate_responses, rx_certificate_responses) = channel(10);
@@ -82,19 +85,14 @@ async fn test_successful_block_synchronization() {
 
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
-    let handlers = FuturesUnordered::new();
-    for primary in committee.others_primaries(&name) {
-        println!("New primary added: {:?}", primary.1.primary_to_primary);
-
-        let handler = primary_listener::<Ed25519PublicKey>(
-            primary.0,
-            primary.1.primary_to_primary,
-            certificates.clone(),
-            tx_certificate_responses.clone(),
-            payload_store.clone(),
-        );
-        handlers.push(handler);
-    }
+    let handlers: FuturesUnordered<JoinHandle<Vec<PrimaryMessage<Ed25519PublicKey>>>> = committee
+        .others_primaries(&name)
+        .iter()
+        .map(|primary| {
+            println!("New primary added: {:?}", primary.1.primary_to_primary);
+            listener::<PrimaryMessage<Ed25519PublicKey>>(1, primary.1.primary_to_primary)
+        })
+        .collect();
 
     // WHEN
     tx_commands
@@ -107,11 +105,51 @@ async fn test_successful_block_synchronization() {
         .unwrap();
 
     // wait for the primaries to receive all the requests
-    if timeout(Duration::from_millis(4_000), try_join_all(handlers))
-        .await
-        .is_err()
-    {
-        panic!("primaries haven't received expected requests")
+    if let Ok(result) = timeout(Duration::from_millis(4_000), try_join_all(handlers)).await {
+        assert!(result.is_ok(), "Error returned");
+
+        let mut primaries = committee.others_primaries(&name);
+
+        for mut primary_responses in result.unwrap() {
+            // ensure that only one request has been received
+            assert_eq!(primary_responses.len(), 1, "Expected only one request");
+
+            match primary_responses.remove(0) {
+                PrimaryMessage::CertificatesBatchRequest {
+                    certificate_ids,
+                    requestor,
+                } => {
+                    let response_certificates: Vec<(
+                        CertificateDigest,
+                        Option<Certificate<Ed25519PublicKey>>,
+                    )> = certificate_ids
+                        .iter()
+                        .map(|id| {
+                            if let Some(certificate) = certificates.get(id) {
+                                (*id, Some(certificate.clone()))
+                            } else {
+                                panic!(
+                                    "Received certificate with id {id} not amongst the expected"
+                                );
+                            }
+                        })
+                        .collect();
+
+                    debug!("{:?}", requestor);
+
+                    tx_certificate_responses
+                        .send(CertificatesResponse {
+                            certificates: response_certificates,
+                            from: primaries.pop().unwrap().0,
+                        })
+                        .await
+                        .unwrap();
+                }
+                _ => {
+                    panic!("Unexpected request has been received!");
+                }
+            }
+        }
     }
 
     // THEN
@@ -148,22 +186,33 @@ async fn test_successful_block_synchronization() {
 }
 
 #[tokio::test]
-async fn test_await_for_certificate_responses_from_majority() {
+async fn test_successful_payload_synchronization() {
     // GIVEN
-    let (name, committee) = resolve_name_and_committee(13001);
+    let (_, _, payload_store) = create_db_stores();
 
-    let (tx_certificate_responses, rx_certificate_responses) = channel(10);
+    // AND the necessary keys
+    let (name, committee) = resolve_name_and_committee(13000);
+
+    let (tx_commands, rx_commands) = channel(10);
+    let (_tx_certificate_responses, rx_certificate_responses) = channel(10);
+    let (tx_payload_availability_responses, rx_payload_availability_responses) = channel(10);
 
     // AND some blocks (certificates)
     let mut certificates: HashMap<CertificateDigest, Certificate<Ed25519PublicKey>> =
         HashMap::new();
 
     let key = keys().pop().unwrap();
+    let worker_id_0: u32 = 0;
+    let worker_id_1: u32 = 1;
 
     // AND generate headers with distributed batches between 2 workers (0 and 1)
-    for _ in 0..5 {
+    for _ in 0..8 {
+        let batch_1 = fixture_batch_with_transactions(10);
+        let batch_2 = fixture_batch_with_transactions(10);
+
         let header = fixture_header_builder()
-            .with_payload_batch(fixture_batch_with_transactions(10), 0)
+            .with_payload_batch(batch_1.clone(), worker_id_0)
+            .with_payload_batch(batch_2.clone(), worker_id_1)
             .build(|payload| key.sign(payload));
 
         let certificate = certificate(&header);
@@ -171,73 +220,159 @@ async fn test_await_for_certificate_responses_from_majority() {
         certificates.insert(certificate.clone().digest(), certificate.clone());
     }
 
-    let block_ids: Vec<CertificateDigest> = certificates.keys().copied().collect();
+    // AND create the synchronizer
+    BlockSynchronizer::spawn(
+        name.clone(),
+        committee.clone(),
+        rx_commands,
+        rx_certificate_responses,
+        rx_payload_availability_responses,
+        SimpleSender::new(),
+        payload_store.clone(),
+        BlockSynchronizerParameters::default(),
+    );
 
-    let request_id = RequestID::from(block_ids.as_slice());
+    // AND the channel to respond to
+    let (tx_synchronize, mut rx_synchronize) = channel(10);
 
-    let primaries = committee.others_primaries(&name);
-
-    let certificates_to_be_sent: Vec<(CertificateDigest, Option<Certificate<Ed25519PublicKey>>)> =
-        certificates
+    // AND let's assume that all the primaries are responding with the full set
+    // of requested certificates.
+    let handlers_primaries: FuturesUnordered<JoinHandle<Vec<PrimaryMessage<Ed25519PublicKey>>>> =
+        committee
+            .others_primaries(&name)
             .iter()
-            .map(|e| (*e.0, Some(e.1.clone())))
+            .map(|primary| {
+                println!("New primary added: {:?}", primary.1.primary_to_primary);
+                listener::<PrimaryMessage<Ed25519PublicKey>>(1, primary.1.primary_to_primary)
+            })
             .collect();
 
-    // AND send the responses from all the primaries
-    for primary in primaries.clone() {
-        let name = primary.0;
+    // AND spin up the corresponding worker nodes
+    let mut workers = vec![
+        (worker_id_0, committee.worker(&name, &worker_id_0).unwrap()),
+        (worker_id_1, committee.worker(&name, &worker_id_1).unwrap()),
+    ];
 
-        tx_certificate_responses
-            .send(CertificatesResponse {
-                certificates: certificates_to_be_sent.clone(),
-                from: name,
-            })
-            .await
-            .unwrap();
-    }
+    let handlers_workers: FuturesUnordered<
+        JoinHandle<Vec<PrimaryWorkerMessage<Ed25519PublicKey>>>,
+    > = workers
+        .iter()
+        .map(|worker| {
+            println!("New worker added: {:?}", worker.1.primary_to_worker);
+            listener::<PrimaryWorkerMessage<Ed25519PublicKey>>(-1, worker.1.primary_to_worker)
+        })
+        .collect();
 
-    let _result = BlockSynchronizer::wait_for_certificate_responses(
-        Duration::from_millis(2_000),
-        request_id,
-        committee.clone(),
-        block_ids,
-        primaries.into_iter().map(|(name, _)| name).collect(),
-        rx_certificate_responses,
+    // WHEN
+    tx_commands
+        .send(Command::SynchronizeBlockPayload {
+            certificates: certificates.values().cloned().collect(),
+            respond_to: tx_synchronize,
+        })
+        .await
+        .ok()
+        .unwrap();
+
+    // wait for the primaries to receive all the requests
+    if let Ok(result) = timeout(
+        Duration::from_millis(4_000),
+        try_join_all(handlers_primaries),
     )
-    .await;
+    .await
+    {
+        assert!(result.is_ok(), "Error returned");
 
-    /*
-    match result {
-        StateCommand::SynchronizePayload {
-            _request_id: request_id,
-            _peers: peers,
-        } => {
-            assert_eq!(request_id, request_id);
+        let mut primaries = committee.others_primaries(&name);
 
-            // we expect to have "exited" when 2 responses have been received
-            // since this is the 50% of the total of peers.
-            assert_eq!(peers.peers().len(), 2);
+        for mut primary_responses in result.unwrap() {
+            // ensure that only one request has been received
+            assert_eq!(primary_responses.len(), 1, "Expected only one request");
 
-            // ensure that each peer has the requested certificates
-            for (_, peer) in peers.peers() {
-                assert_eq!(
-                    peer.values_able_to_serve.len(),
-                    certificates.len(),
-                    "Mismatch in certificates responded than expected"
-                );
+            match primary_responses.remove(0) {
+                PrimaryMessage::PayloadAvailabilityRequest {
+                    certificate_ids,
+                    requestor,
+                } => {
+                    let response: Vec<(CertificateDigest, bool)> = certificate_ids
+                        .iter()
+                        .map(|id| (*id, certificates.contains_key(id)))
+                        .collect();
 
-                for (digest, _) in peer.values_able_to_serve {
-                    assert!(
-                        certificates.contains_key(&digest),
-                        "Certificate not expected"
-                    );
+                    debug!("{:?}", requestor);
+
+                    tx_payload_availability_responses
+                        .send(PayloadAvailabilityResponse {
+                            block_ids: response,
+                            from: primaries.pop().unwrap().0,
+                        })
+                        .await
+                        .unwrap();
+                }
+                _ => {
+                    panic!("Unexpected request has been received!");
                 }
             }
         }
-        _ => {
-            panic!("Expected to receive a successful synchronize batches command");
+    }
+
+    // now wait to receive all the requests from the workers
+    if let Ok(result) = timeout(Duration::from_millis(4_000), try_join_all(handlers_workers)).await
+    {
+        assert!(result.is_ok(), "Error returned");
+
+        for messages in result.unwrap() {
+            // since everything is in order, just pop the next worker
+            let worker = workers.pop().unwrap();
+
+            for m in messages {
+                match m {
+                    PrimaryWorkerMessage::Synchronize(batch_ids, _) => {
+                        //println!("Synchronize message for batch ids {:?}", batch_ids);
+                        // Assume that the request is the correct one and just immediately
+                        // store the batch to the payload store.
+                        for batch_id in batch_ids {
+                            payload_store.write((batch_id, worker.0), 1).await;
+                        }
+                    }
+                    _ => {
+                        panic!("Unexpected request received");
+                    }
+                }
+            }
         }
-    }*/
+    }
+
+    // THEN
+    let timer = sleep(Duration::from_millis(5_000));
+    tokio::pin!(timer);
+
+    let total_expected_results = certificates.len();
+    let mut total_results_received = 0;
+
+    loop {
+        tokio::select! {
+            Some(result) = rx_synchronize.recv() => {
+                assert!(result.is_ok(), "Error result received: {:?}", result.err().unwrap());
+
+                if result.is_ok() {
+                    let certificate = result.ok().unwrap();
+
+                    println!("Received certificate result: {:?}", certificate.clone());
+
+                    assert!(certificates.contains_key(&certificate.digest()));
+
+                    total_results_received += 1;
+                }
+
+                if total_results_received == total_expected_results {
+                    break;
+                }
+            },
+            () = &mut timer => {
+                panic!("Timeout, no result has been received in time")
+            }
+        }
+    }
 }
 
 #[tokio::test]
@@ -275,9 +410,8 @@ async fn test_multiple_overlapping_requests() {
         rx_commands,
         rx_certificate_responses,
         rx_payload_availability_responses,
-        pending_block_requests: HashMap::new(),
+        pending_requests: HashMap::new(),
         map_certificate_responses_senders: HashMap::new(),
-        pending_block_payload_requests: HashMap::new(),
         map_payload_availability_responses_senders: HashMap::new(),
         network: SimpleSender::new(),
         payload_store,
@@ -307,8 +441,8 @@ async fn test_multiple_overlapping_requests() {
     for digest in block_ids.clone() {
         assert!(
             block_synchronizer
-                .pending_block_requests
-                .contains_key(&digest),
+                .pending_requests
+                .contains_key(&PendingIdentifier::Header(digest)),
             "Expected to have certificate {} pending to retrieve",
             digest
         );
@@ -438,66 +572,46 @@ async fn test_timeout_while_waiting_for_certificates() {
     }
 }
 
-pub fn primary_listener<PublicKey: VerifyingKey>(
-    name: PublicKey,
-    address: SocketAddr,
-    expected_certificates: HashMap<CertificateDigest, Certificate<PublicKey>>,
-    tx_certificate_responses: Sender<CertificatesResponse<PublicKey>>,
-    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-) -> JoinHandle<()> {
+pub fn listener<T>(num_of_expected_responses: i32, address: SocketAddr) -> JoinHandle<Vec<T>>
+where
+    T: Send + DeserializeOwned + 'static,
+{
     tokio::spawn(async move {
-        println!("[{}] Setting up server", &address);
-
         let listener = TcpListener::bind(&address).await.unwrap();
         let (socket, _) = listener.accept().await.unwrap();
         let transport = Framed::new(socket, LengthDelimitedCodec::new());
+        let (_writer, mut reader) = transport.split();
 
-        let (_, mut reader) = transport.split();
-        match reader.next().await {
-            Some(Ok(received)) => {
-                let message = received.freeze();
-                match deserialize(&message) {
-                    Ok(PrimaryMessage::<PublicKey>::CertificatesBatchRequest {
-                        certificate_ids,
-                        requestor,
-                    }) => {
-                        debug!("{:?}", requestor);
+        let mut responses = Vec::new();
 
-                        let mut response_certificates: Vec<(
-                            CertificateDigest,
-                            Option<Certificate<PublicKey>>,
-                        )> = Vec::new();
+        loop {
+            match timeout(Duration::from_secs(1), reader.next()).await {
+                Err(_) => {
+                    // timeout happened - just return whatever has already
+                    return responses;
+                }
+                Ok(Some(Ok(received))) => {
+                    let message = received.freeze();
+                    match deserialize(&message) {
+                        Ok(msg) => {
+                            responses.push(msg);
 
-                        for c_id in certificate_ids {
-                            let cert_option = expected_certificates.get(&c_id);
-
-                            assert!(
-                                cert_option.is_some(),
-                                "Received certificate not amongst the expected"
-                            );
-
-                            let certificate = cert_option.unwrap().clone();
-
-                            response_certificates.push((c_id, Some(certificate.clone())));
-
-                            // write the payload to store and imitate a sync with the workers
-                            for (digest, worker_id) in certificate.header.payload {
-                                payload_store.write((digest, worker_id), 1).await;
+                            // if -1 is given, then we don't count the number of messages
+                            // but we just rely to receive as many as possible until timeout
+                            // happens when waiting for requests.
+                            if num_of_expected_responses != -1
+                                && responses.len() as i32 == num_of_expected_responses
+                            {
+                                return responses;
                             }
                         }
-
-                        tx_certificate_responses
-                            .send(CertificatesResponse {
-                                certificates: response_certificates,
-                                from: name.clone(),
-                            })
-                            .await
-                            .unwrap();
+                        Err(err) => {
+                            panic!("Error occurred {err}");
+                        }
                     }
-                    _ => panic!("Unexpected request received"),
-                };
+                }
+                _ => panic!("Failed to receive network message"),
             }
-            _ => panic!("Failed to receive network message"),
         }
     })
 }

@@ -4,6 +4,7 @@ use crate::{
     block_synchronizer::{
         peers::Peers,
         responses::{CertificatesResponse, PayloadAvailabilityResponse, RequestID},
+        PendingIdentifier::{Header, Payload},
     },
     primary::PrimaryMessage,
     utils, BatchDigest, Certificate, CertificateDigest, PayloadToken, PrimaryWorkerMessage,
@@ -100,6 +101,22 @@ impl SyncError {
     }
 }
 
+#[derive(Hash, Eq, PartialEq, Clone, Copy)]
+enum PendingIdentifier {
+    Header(CertificateDigest),
+    Payload(CertificateDigest),
+}
+
+impl PendingIdentifier {
+    #[allow(dead_code)]
+    fn id(&self) -> CertificateDigest {
+        match self {
+            PendingIdentifier::Header(id) => *id,
+            PendingIdentifier::Payload(id) => *id,
+        }
+    }
+}
+
 pub struct BlockSynchronizer<PublicKey: VerifyingKey> {
     /// The public key of this primary.
     name: PublicKey,
@@ -117,14 +134,11 @@ pub struct BlockSynchronizer<PublicKey: VerifyingKey> {
     /// channel
     rx_payload_availability_responses: Receiver<PayloadAvailabilityResponse<PublicKey>>,
 
-    /// Pending block requests
-    pending_block_requests: HashMap<CertificateDigest, Vec<ResultSender<PublicKey>>>,
+    /// Pending block requests either for header or payload type
+    pending_requests: HashMap<PendingIdentifier, Vec<ResultSender<PublicKey>>>,
 
     /// Requests managers
     map_certificate_responses_senders: HashMap<RequestID, Sender<CertificatesResponse<PublicKey>>>,
-
-    /// Pending block payload requests
-    pending_block_payload_requests: HashMap<CertificateDigest, Vec<ResultSender<PublicKey>>>,
 
     /// Holds the senders to match a batch_availability responses
     map_payload_availability_responses_senders:
@@ -164,9 +178,8 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                 rx_commands,
                 rx_certificate_responses,
                 rx_payload_availability_responses,
-                pending_block_requests: HashMap::new(),
+                pending_requests: HashMap::new(),
                 map_certificate_responses_senders: HashMap::new(),
-                pending_block_payload_requests: HashMap::new(),
                 map_payload_availability_responses_senders: HashMap::new(),
                 network,
                 payload_store,
@@ -218,28 +231,31 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                             println!("Result for the block headers synchronize request id {}", request_id);
 
                             for (id, result) in certificates {
-                                self.handle_synchronize_block_header_result(id, result).await;
+                                self.notify_requestors_for_result(Header(id), result).await;
                             }
                         },
                         State::PayloadAvailabilityReceived { request_id, certificates, peers } => {
                              println!("Result for the block payload synchronize request id {}", request_id);
 
+                            // now try to synchronise the payload only for the ones that have been found
+                            let futures = self.handle_synchronize_block_payloads(request_id, peers).await;
+                            for fut in futures {
+                                waiting.push(fut);
+                            }
+
                             // notify immediately for block_ids that have been errored or timedout
                             for (id, result) in certificates {
                                 if result.is_err() {
-                                    self.handle_synchronize_block_payload_result(id, result).await;
+                                    self.notify_requestors_for_result(Payload(id), result).await;
                                 }
                             }
-
-                            // now try to synchronise the payload only for the ones that have been found
-                            self.handle_synchronize_block_payloads(request_id, peers).await;
                         },
                         State::PayloadSynchronized { request_id, result } => {
-                            let block_id = result.clone().map_or_else(|e| e.block_id(), |r| r.digest());
+                            let id = result.clone().map_or_else(|e| e.block_id(), |r| r.digest());
 
-                            println!("Block payload synchronize result received for certificate id {block_id} for request id {request_id}");
+                            println!("Block payload synchronize result received for certificate id {id} for request id {request_id}");
 
-                            self.handle_synchronize_block_payload_result(block_id, result).await;
+                            self.notify_requestors_for_result(Payload(id), result).await;
                         },
                     }
                 }
@@ -247,13 +263,13 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         }
     }
 
-    async fn handle_synchronize_block_header_result(
+    async fn notify_requestors_for_result(
         &mut self,
-        block_id: CertificateDigest,
+        request: PendingIdentifier,
         result: BlockSynchronizeResult<Certificate<PublicKey>>,
     ) {
         // remove the senders & broadcast result
-        if let Some(respond_to) = self.pending_block_requests.remove(&block_id) {
+        if let Some(respond_to) = self.pending_requests.remove(&request) {
             let futures: Vec<_> = respond_to.iter().map(|s| s.send(result.clone())).collect();
 
             for r in join_all(futures).await {
@@ -264,21 +280,21 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         }
     }
 
-    async fn handle_synchronize_block_payload_result(
+    // Helper method to mark a request as pending. It returns true if it is the
+    // first request for this identifier, otherwise false is returned instead.
+    fn resolve_pending_request(
         &mut self,
-        block_id: CertificateDigest,
-        result: BlockSynchronizeResult<Certificate<PublicKey>>,
-    ) {
-        // remove the senders & broadcast result
-        if let Some(respond_to) = self.pending_block_payload_requests.remove(&block_id) {
-            let futures: Vec<_> = respond_to.iter().map(|s| s.send(result.clone())).collect();
+        identifier: PendingIdentifier,
+        respond_to: ResultSender<PublicKey>,
+    ) -> bool {
+        // add our self anyways to a pending request, as we don't expect to
+        // fail down the line of this method (unless crash)
+        self.pending_requests
+            .entry(identifier)
+            .or_default()
+            .push(respond_to);
 
-            for r in join_all(futures).await {
-                if r.is_err() {
-                    error!("Couldn't send message to channel [{:?}]", r.err().unwrap());
-                }
-            }
-        }
+        return self.pending_requests.get(&identifier).unwrap().len() == 1;
     }
 
     async fn handle_synchronize_block_payload_command<'a>(
@@ -291,18 +307,11 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         for certificate in certificates.clone() {
             let block_id = certificate.digest();
 
-            if self.pending_block_payload_requests.contains_key(&block_id) {
-                debug!("Nothing to request here, it's already in pending state");
-            } else {
+            if self.resolve_pending_request(Payload(block_id), respond_to.clone()) {
                 to_sync.push(certificate);
+            } else {
+                debug!("Nothing to request here, it's already in pending state");
             }
-
-            // add our self anyways to a pending request, as we don't expect to
-            // fail down the line of this method (unless crash)
-            self.pending_block_payload_requests
-                .entry(block_id)
-                .or_insert_with(Vec::new)
-                .push(respond_to.clone());
         }
 
         // nothing new to sync! just return
@@ -348,18 +357,11 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         // a new request to synchronise blocks
         // check if there are pending requests. If yes, then ignore
         for block_id in block_ids.clone() {
-            if self.pending_block_requests.contains_key(&block_id) {
-                debug!("Nothing to request here, it's already in pending state");
-            } else {
+            if self.resolve_pending_request(Header(block_id), respond_to.clone()) {
                 to_sync.push(block_id);
+            } else {
+                debug!("Nothing to request here, it's already in pending state");
             }
-
-            // add our self anyways to a pending request, as we don't expect to
-            // fail down the line of this method (unless crash)
-            self.pending_block_requests
-                .entry(block_id)
-                .or_insert_with(Vec::new)
-                .push(respond_to.clone());
         }
 
         // nothing new to sync! just return
@@ -488,7 +490,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     }
 
     async fn wait_for_block_payload<'a>(
-        synchronizing_batches_timeout: Duration,
+        payload_synchronize_timeout: Duration,
         request_id: RequestID,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         certificate: Certificate<PublicKey>,
@@ -501,7 +503,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
             .collect::<Vec<_>>();
 
         // Wait for all the items to sync - have a timeout
-        let result = timeout(synchronizing_batches_timeout, join_all(futures)).await;
+        let result = timeout(payload_synchronize_timeout, join_all(futures)).await;
         if result.is_err()
             || result
                 .unwrap()
@@ -510,15 +512,15 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         {
             return State::PayloadSynchronized {
                 request_id,
-                result: Ok(certificate),
+                result: Err(SyncError::Timeout {
+                    block_id: certificate.digest(),
+                }),
             };
         }
 
         State::PayloadSynchronized {
             request_id,
-            result: Err(SyncError::Timeout {
-                block_id: certificate.digest(),
-            }),
+            result: Ok(certificate),
         }
     }
 
