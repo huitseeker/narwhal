@@ -18,6 +18,7 @@ use executor::{
 };
 use futures::future::join_all;
 use node::{Node, NodeStorage};
+use primary::Ed25519PublicKeyMapper;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::mpsc::{channel, Receiver};
@@ -141,6 +142,8 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
     let (tx_transaction_confirmation, rx_transaction_confirmation) =
         channel(Node::CHANNEL_CAPACITY);
 
+    let public_key_mapper = Ed25519PublicKeyMapper {};
+
     // Check whether to run a primary, a worker, or an entire authority.
     let node_handles = match matches.subcommand() {
         // Spawn the primary and consensus core.
@@ -153,6 +156,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
                 /* consensus */ !sub_matches.is_present("consensus-disabled"),
                 /* execution_state */ Arc::new(SimpleExecutionState),
                 tx_transaction_confirmation,
+                public_key_mapper,
             )
             .await?;
             vec![handle]
