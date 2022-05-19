@@ -7,7 +7,7 @@ use crypto::{
     Hash,
 };
 use node::NodeStorage;
-use primary::{Ed25519PublicKeyMapper, Primary, CHANNEL_CAPACITY};
+use primary::{Primary, CHANNEL_CAPACITY};
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use test_utils::{committee, keys, make_optimal_certificates, temp_dir};
 use tokio::sync::mpsc::channel;
@@ -70,7 +70,6 @@ async fn test_rounds_errors() {
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* external_consensus */ Some(Arc::new(Dag::new(rx_new_certificates).1)),
-        Ed25519PublicKeyMapper {},
     );
 
     // AND Wait for tasks to start
@@ -135,7 +134,6 @@ async fn test_rounds_return_successful_response() {
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* external_consensus */ Some(dag.clone()),
-        Ed25519PublicKeyMapper {},
     );
 
     // AND Wait for tasks to start

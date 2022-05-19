@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use self::{configuration::NarwhalConfiguration, validator::NarwhalValidator};
-use crate::{
-    grpc_server::{proposer::NarwhalProposer, public_key_mapper::PublicKeyMapper},
-    BlockCommand, BlockRemoverCommand,
-};
+use crate::{grpc_server::proposer::NarwhalProposer, BlockCommand, BlockRemoverCommand};
 use config::Committee;
 use consensus::dag::Dag;
 use crypto::traits::VerifyingKey;
@@ -17,23 +14,19 @@ use types::{ConfigurationServer, ProposerServer, ValidatorServer};
 
 mod configuration;
 mod proposer;
-pub mod public_key_mapper;
 mod validator;
 
-pub struct ConsensusAPIGrpc<PublicKey: VerifyingKey, KeyMapper: PublicKeyMapper<PublicKey>> {
+pub struct ConsensusAPIGrpc<PublicKey: VerifyingKey> {
     socket_addr: Multiaddr,
     tx_get_block_commands: Sender<BlockCommand>,
     tx_block_removal_commands: Sender<BlockRemoverCommand>,
     get_collections_timeout: Duration,
     remove_collections_timeout: Duration,
     dag: Option<Arc<Dag<PublicKey>>>,
-    public_key_mapper: KeyMapper,
     committee: Committee<PublicKey>,
 }
 
-impl<PublicKey: VerifyingKey, KeyMapper: PublicKeyMapper<PublicKey>>
-    ConsensusAPIGrpc<PublicKey, KeyMapper>
-{
+impl<PublicKey: VerifyingKey> ConsensusAPIGrpc<PublicKey> {
     pub fn spawn(
         socket_addr: Multiaddr,
         tx_get_block_commands: Sender<BlockCommand>,
@@ -41,7 +34,6 @@ impl<PublicKey: VerifyingKey, KeyMapper: PublicKeyMapper<PublicKey>>
         get_collections_timeout: Duration,
         remove_collections_timeout: Duration,
         dag: Option<Arc<Dag<PublicKey>>>,
-        public_key_mapper: KeyMapper,
         committee: Committee<PublicKey>,
     ) {
         tokio::spawn(async move {
@@ -52,7 +44,6 @@ impl<PublicKey: VerifyingKey, KeyMapper: PublicKeyMapper<PublicKey>>
                 get_collections_timeout,
                 remove_collections_timeout,
                 dag,
-                public_key_mapper,
                 committee,
             }
             .run()
@@ -69,11 +60,7 @@ impl<PublicKey: VerifyingKey, KeyMapper: PublicKeyMapper<PublicKey>>
             self.remove_collections_timeout,
         );
 
-        let narwhal_proposer = NarwhalProposer::new(
-            self.dag.clone(),
-            self.public_key_mapper.clone(),
-            self.committee.clone(),
-        );
+        let narwhal_proposer = NarwhalProposer::new(self.dag.clone(), self.committee.clone());
 
         let narwhal_configuration = NarwhalConfiguration::new();
 

@@ -47,10 +47,7 @@ use types::{
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
-use crate::{
-    block_synchronizer::handler::BlockSynchronizerHandler,
-    grpc_server::public_key_mapper::PublicKeyMapper,
-};
+use crate::block_synchronizer::handler::BlockSynchronizerHandler;
 pub use types::{PrimaryMessage, PrimaryWorkerMessage};
 
 /// The messages sent by the workers to their primary.
@@ -86,11 +83,7 @@ pub struct Primary;
 impl Primary {
     const INADDR_ANY: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
 
-    pub fn spawn<
-        PublicKey: VerifyingKey,
-        Signatory: Signer<PublicKey::Sig> + Send + 'static,
-        KeyMapper: PublicKeyMapper<PublicKey>,
-    >(
+    pub fn spawn<PublicKey: VerifyingKey, Signatory: Signer<PublicKey::Sig> + Send + 'static>(
         name: PublicKey,
         signer: Signatory,
         committee: Committee<PublicKey>,
@@ -101,7 +94,6 @@ impl Primary {
         tx_consensus: Sender<Certificate<PublicKey>>,
         rx_consensus: Receiver<Certificate<PublicKey>>,
         dag: Option<Arc<Dag<PublicKey>>>,
-        public_key_mapper: KeyMapper,
     ) -> JoinHandle<()> {
         let (tx_others_digests, rx_others_digests) = channel(CHANNEL_CAPACITY);
         let (tx_our_digests, rx_our_digests) = channel(CHANNEL_CAPACITY);
@@ -317,7 +309,6 @@ impl Primary {
                 parameters.consensus_api_grpc.get_collections_timeout,
                 parameters.consensus_api_grpc.remove_collections_timeout,
                 dag,
-                public_key_mapper,
                 committee.clone(),
             );
         }

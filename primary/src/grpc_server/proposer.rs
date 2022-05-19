@@ -1,4 +1,3 @@
-use crate::grpc_server::public_key_mapper::PublicKeyMapper;
 use config::Committee;
 use consensus::dag::Dag;
 use crypto::traits::VerifyingKey;
@@ -6,31 +5,17 @@ use std::sync::Arc;
 use tonic::{Request, Response, Status};
 use types::{Proposer, RoundsRequest, RoundsResponse};
 
-pub struct NarwhalProposer<PublicKey: VerifyingKey, KeyMapper: PublicKeyMapper<PublicKey>> {
+pub struct NarwhalProposer<PublicKey: VerifyingKey> {
     /// The dag that holds the available certificates to propose
     dag: Option<Arc<Dag<PublicKey>>>,
-
-    /// The mapper to use to convert the PublicKeyProto to the
-    /// corresponding PublicKey type.
-    public_key_mapper: KeyMapper,
 
     /// The committee
     committee: Committee<PublicKey>,
 }
 
-impl<PublicKey: VerifyingKey, KeyMapper: PublicKeyMapper<PublicKey>>
-    NarwhalProposer<PublicKey, KeyMapper>
-{
-    pub fn new(
-        dag: Option<Arc<Dag<PublicKey>>>,
-        public_key_mapper: KeyMapper,
-        committee: Committee<PublicKey>,
-    ) -> Self {
-        Self {
-            dag,
-            public_key_mapper,
-            committee,
-        }
+impl<PublicKey: VerifyingKey> NarwhalProposer<PublicKey> {
+    pub fn new(dag: Option<Arc<Dag<PublicKey>>>, committee: Committee<PublicKey>) -> Self {
+        Self { dag, committee }
     }
 
     /// Extracts and verifies the public key provided from the RoundsRequest.
@@ -38,12 +23,11 @@ impl<PublicKey: VerifyingKey, KeyMapper: PublicKeyMapper<PublicKey>>
     /// parsed public key. The Err() will hold a Status message with the
     /// specific error description.
     fn get_public_key(&self, request: RoundsRequest) -> Result<PublicKey, Status> {
-        let key =
-            self.public_key_mapper
-                .map(request.public_key.ok_or_else(|| {
-                    Status::invalid_argument("Invalid public key: no key provided")
-                })?)
-                .map_err(|_| Status::invalid_argument("Invalid public key: couldn't parse"))?;
+        let proto_key = request
+            .public_key
+            .ok_or_else(|| Status::invalid_argument("Invalid public key: no key provided"))?;
+        let key = PublicKey::from_bytes(proto_key.bytes.as_ref())
+            .map_err(|_| Status::invalid_argument("Invalid public key: couldn't parse"))?;
 
         // ensure provided key is part of the committee
         if self.committee.primary(&key).is_err() {
@@ -57,9 +41,7 @@ impl<PublicKey: VerifyingKey, KeyMapper: PublicKeyMapper<PublicKey>>
 }
 
 #[tonic::async_trait]
-impl<PublicKey: VerifyingKey, KeyMapper: PublicKeyMapper<PublicKey>> Proposer
-    for NarwhalProposer<PublicKey, KeyMapper>
-{
+impl<PublicKey: VerifyingKey> Proposer for NarwhalProposer<PublicKey> {
     /// Retrieves the min & max rounds that contain collections available for
     /// block proposal for the dictated validator.
     /// by the provided public key.

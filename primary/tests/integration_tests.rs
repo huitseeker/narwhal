@@ -10,7 +10,7 @@ use crypto::{
 };
 use futures::future::join_all;
 use node::NodeStorage;
-use primary::{Ed25519PublicKeyMapper, PayloadToken, Primary, CHANNEL_CAPACITY};
+use primary::{PayloadToken, Primary, CHANNEL_CAPACITY};
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
@@ -98,7 +98,6 @@ async fn test_get_collections() {
 
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
-    let public_key_mapper = Ed25519PublicKeyMapper {};
 
     Primary::spawn(
         name.clone(),
@@ -111,7 +110,6 @@ async fn test_get_collections() {
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(Arc::new(Dag::new(rx_new_certificates).1)),
-        public_key_mapper,
     );
 
     // Spawn a `Worker` instance.
@@ -271,7 +269,6 @@ async fn test_remove_collections() {
     }
 
     let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
-    let public_key_mapper = Ed25519PublicKeyMapper {};
 
     Primary::spawn(
         name.clone(),
@@ -284,7 +281,6 @@ async fn test_remove_collections() {
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
-        public_key_mapper,
     );
 
     // Wait for tasks to start
@@ -404,7 +400,6 @@ async fn test_new_network_info() {
 
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
-    let public_key_mapper = Ed25519PublicKeyMapper {};
 
     Primary::spawn(
         name.clone(),
@@ -417,7 +412,6 @@ async fn test_new_network_info() {
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(Arc::new(Dag::new(rx_new_certificates).1)),
-        public_key_mapper,
     );
 
     // Wait for tasks to start
@@ -519,7 +513,6 @@ async fn test_get_collections_with_missing_certificates() {
     // Spawn the primary 1 (which will be the one that we'll interact with)
     let (tx_new_certificates_1, rx_new_certificates_1) = channel(CHANNEL_CAPACITY);
     let (_tx_feedback_1, rx_feedback_1) = channel(CHANNEL_CAPACITY);
-    let public_key_mapper = Ed25519PublicKeyMapper {};
 
     Primary::spawn(
         name_1.clone(),
@@ -532,7 +525,6 @@ async fn test_get_collections_with_missing_certificates() {
         /* tx_consensus */ tx_new_certificates_1,
         /* rx_consensus */ rx_feedback_1,
         /* external_consensus */ Some(Arc::new(Dag::new(rx_new_certificates_1).1)),
-        public_key_mapper,
     );
 
     // Spawn a `Worker` instance for primary 1.
@@ -547,7 +539,6 @@ async fn test_get_collections_with_missing_certificates() {
     // Spawn the primary 2 - a peer to fetch missing certificates from
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
     let (_tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
-    let public_key_mapper = Ed25519PublicKeyMapper {};
 
     Primary::spawn(
         name_2.clone(),
@@ -560,7 +551,6 @@ async fn test_get_collections_with_missing_certificates() {
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
         /* external_consensus */ Some(Arc::new(Dag::new(rx_new_certificates_2).1)),
-        public_key_mapper,
     );
 
     // Spawn a `Worker` instance for primary 2.
