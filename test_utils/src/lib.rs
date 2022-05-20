@@ -238,9 +238,28 @@ pub fn mock_certificate(
     (certificate.digest(), certificate)
 }
 
+// Creates one signed certificate from a set of signers
+pub fn mock_signed_certificate(
+    signers: &[Ed25519KeyPair],
+    origin: Ed25519PublicKey,
+    round: Round,
+    parents: BTreeSet<CertificateDigest>,
+) -> (CertificateDigest, Certificate<Ed25519PublicKey>) {
+    let (_, mut cert) = mock_certificate(origin, round, parents);
+    for signer in signers {
+        let pk = signer.public();
+        let sig = signer
+            .try_sign(Digest::from(cert.header.digest()).as_ref())
+            .unwrap();
+        cert.votes.push((pk.clone(), sig))
+    }
+    (cert.digest(), cert)
+}
+
 // Creates one certificate per authority starting and finishing at the specified rounds (inclusive).
 // Outputs a VecDeque of certificates (the certificate with higher round is on the front) and a set
 // of digests to be used as parents for the certificates of the next round.
+// Note: the certificates are unsigned
 pub fn make_optimal_certificates(
     start: Round,
     stop: Round,
@@ -253,6 +272,70 @@ pub fn make_optimal_certificates(
     make_certificates(start, stop, initial_parents, keys, 0.0)
 }
 
+// Outputs rounds worth of certificates with optimal parents, signed
+pub fn make_optimal_signed_certificates(
+    start: Round,
+    stop: Round,
+    initial_parents: &BTreeSet<CertificateDigest>,
+    keys: &[Ed25519KeyPair],
+) -> (
+    VecDeque<Certificate<Ed25519PublicKey>>,
+    BTreeSet<CertificateDigest>,
+) {
+    make_signed_certificates(start, stop, initial_parents, keys, 0.0)
+}
+
+// Bernouilli-samples from a set of ancestors passed as a argument,
+fn this_cert_parents(
+    ancestors: &BTreeSet<CertificateDigest>,
+    failure_prob: f64,
+) -> BTreeSet<CertificateDigest> {
+    std::iter::from_fn(|| {
+        let f: f64 = rand::thread_rng().gen();
+        Some(f > failure_prob)
+    })
+    .zip(ancestors)
+    .flat_map(|(parenthood, parent)| parenthood.then(|| *parent))
+    .collect::<BTreeSet<_>>()
+}
+
+// Utility for making several rounds worth of certificates through iterated parenthood sampling.
+// The making of individial certificates once parents are figured out is delegated to the `make_one_certificate` argument
+fn rounds_of_certificates(
+    start: Round,
+    stop: Round,
+    initial_parents: &BTreeSet<CertificateDigest>,
+    keys: &[Ed25519PublicKey],
+    failure_probability: f64,
+    make_one_certificate: impl Fn(
+        Ed25519PublicKey,
+        Round,
+        BTreeSet<CertificateDigest>,
+    ) -> (CertificateDigest, Certificate<Ed25519PublicKey>),
+) -> (
+    VecDeque<Certificate<Ed25519PublicKey>>,
+    BTreeSet<CertificateDigest>,
+) {
+    let mut certificates = VecDeque::new();
+    let mut parents = initial_parents.iter().cloned().collect::<BTreeSet<_>>();
+    let mut next_parents = BTreeSet::new();
+
+    for round in start..=stop {
+        next_parents.clear();
+        for name in keys {
+            let this_cert_parents = this_cert_parents(&parents, failure_probability);
+
+            let (digest, certificate) =
+                make_one_certificate(name.clone(), round, this_cert_parents);
+            certificates.push_back(certificate);
+            next_parents.insert(digest);
+        }
+        parents = next_parents.clone();
+    }
+    (certificates, next_parents)
+}
+
+// make rounds worth of unsigned certificates with the sampled number of parents
 pub fn make_certificates(
     start: Round,
     stop: Round,
@@ -263,48 +346,38 @@ pub fn make_certificates(
     VecDeque<Certificate<Ed25519PublicKey>>,
     BTreeSet<CertificateDigest>,
 ) {
-    let mut certificates = VecDeque::new();
-    let mut parents = initial_parents.iter().cloned().collect::<BTreeSet<_>>();
-    let mut next_parents = BTreeSet::new();
+    rounds_of_certificates(
+        start,
+        stop,
+        initial_parents,
+        keys,
+        failure_probability,
+        mock_certificate,
+    )
+}
 
-    fn this_cert_parents(
-        ancestors: &BTreeSet<CertificateDigest>,
-        failure_prob: f64,
-    ) -> BTreeSet<CertificateDigest> {
-        std::iter::from_fn(|| {
-            let f: f64 = rand::thread_rng().gen();
-            if f > failure_prob {
-                Some(true)
-            } else {
-                Some(false)
-            }
-        })
-        .take(ancestors.len())
-        .zip(ancestors)
-        .flat_map(
-            |(parenthood, parent)| {
-                if parenthood {
-                    Some(*parent)
-                } else {
-                    None
-                }
-            },
-        )
-        .collect::<BTreeSet<_>>()
-    }
+// make rounds worth of signed certificates with the sampled number of parents
+pub fn make_signed_certificates(
+    start: Round,
+    stop: Round,
+    initial_parents: &BTreeSet<CertificateDigest>,
+    keys: &[Ed25519KeyPair],
+    failure_probability: f64,
+) -> (
+    VecDeque<Certificate<Ed25519PublicKey>>,
+    BTreeSet<CertificateDigest>,
+) {
+    let public_keys = keys.iter().map(|k| k.public().clone()).collect::<Vec<_>>();
+    let generator = |pk, round, parents| mock_signed_certificate(keys, pk, round, parents);
 
-    for round in start..=stop {
-        next_parents.clear();
-        for name in keys {
-            let this_cert_parents = this_cert_parents(&parents, failure_probability);
-
-            let (digest, certificate) = mock_certificate(name.clone(), round, this_cert_parents);
-            certificates.push_back(certificate);
-            next_parents.insert(digest);
-        }
-        parents = next_parents.clone();
-    }
-    (certificates, next_parents)
+    rounds_of_certificates(
+        start,
+        stop,
+        initial_parents,
+        &public_keys[..],
+        failure_probability,
+        generator,
+    )
 }
 
 // Fixture
