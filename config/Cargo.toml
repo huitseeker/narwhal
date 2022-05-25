@@ -16,7 +16,7 @@ crypto = { path = "../crypto" }
 arc-swap = { version = "1.5.0", features = ["serde"] }
 
 [dev-dependencies]
-rand = "0.7.3"
+rand = "0.8.5"
 tempfile = "3.3.0"
 tracing-test = { version = "0.2.1" }
 
