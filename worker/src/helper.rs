@@ -7,7 +7,7 @@ use crypto::traits::VerifyingKey;
 use network::WorkerNetwork;
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
-use tracing::{error, trace, warn};
+use tracing::{error, trace, warn, debug};
 use types::{BatchDigest, SerializedBatchMessage};
 
 #[cfg(test)]
@@ -52,7 +52,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
         });
     }
 
-    async fn run(&mut self) {
+    async fn run(&mut self) -> ! {
         // TODO [issue #7]: Do some accounting to prevent bad actors from monopolizing our resources.
         loop {
             tokio::select! {
@@ -86,10 +86,13 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                     // Reply to the request (the best we can).
                     for digest in digests {
                         match self.store.read(digest).await {
-                            Ok(Some(data)) => replier
+                            Ok(Some(data)) => {
+                                debug!("Answering request for batch {digest} with data");
+                                replier
                                 .send(data)
                                 .await
-                                .expect("Failed to reply to network"),
+                                .expect("Failed to reply to network")
+                            }
                             Ok(None) => (),
                             Err(e) => error!("{e}"),
                         }

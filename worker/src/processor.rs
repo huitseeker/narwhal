@@ -6,6 +6,7 @@ use config::WorkerId;
 use primary::WorkerPrimaryMessage;
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
+use tracing::debug;
 use types::{serialized_batch_digest, BatchDigest, SerializedBatchMessage};
 
 #[cfg(test)]
@@ -34,6 +35,7 @@ impl Processor {
                 let digest = serialized_batch_digest(&batch);
 
                 // Store the batch.
+                debug!("Storing batch {digest}");
                 store.write(digest, batch).await;
 
                 // Deliver the batch's digest.
