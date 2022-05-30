@@ -78,7 +78,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             worker
                 .committee
                 .primary(&worker.name)
-                .expect("Our public key is not in the committee")
+                .expect("Our primary public key is not in the committee")
                 .worker_to_primary,
             rx_primary,
         );
