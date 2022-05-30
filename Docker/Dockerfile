@@ -74,7 +74,7 @@ RUN cargo build --${BUILD_MODE}
 COPY . .
 
 # Build the binary named "node"
-RUN cargo build --${BUILD_MODE} --bin node
+RUN cargo build --${BUILD_MODE} --all-features --bin node
 
 #################################################################
 # Stage 3 : Production image
