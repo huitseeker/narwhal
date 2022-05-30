@@ -633,7 +633,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
                 }
             }
             None => {
-                error!(
+                panic!(
                     "We should expect to find channels to respond for {}",
                     block_id.clone()
                 );
@@ -651,7 +651,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
             }
             None => {
                 // TODO: handle panic here
-                error!(
+                panic!(
                     "Expected to find certificate with id {} for pending processing",
                     &block_id
                 );
