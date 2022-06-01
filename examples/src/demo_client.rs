@@ -84,6 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "******************************** Proposer Service ********************************\n"
     );
+    println!("\nConnecting to {} as the proposer.", dsts[0]);
     let mut proposer_client_1 = ProposerClient::connect(dsts[0].clone()).await?;
     let mut validator_client_1 = ValidatorClient::connect(dsts[0].clone()).await?;
     let public_key = base64::decode(&base64_keys[0]).unwrap();
@@ -216,7 +217,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let request = tonic::Request::new(node_read_causal_request);
         let response = proposer_client_1.node_read_causal(request).await;
-        // let node_read_causal_response = response.unwrap().into_inner();
+
         if let Some(node_read_causal_response) = println_and_into_inner(response) {
             block_proposal_starting_collection =
                 Some(node_read_causal_response.collection_ids[0].clone());
@@ -248,6 +249,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // we're probably running the docker command with a single endpoint
         dsts[0].clone()
     };
+    println!("\nConnecting to {other_validator} as the validator");
     let mut validator_client_2 = ValidatorClient::connect(other_validator).await?;
 
     println!(
@@ -335,7 +337,9 @@ fn get_total_transaction_count_and_size(result: Vec<CollectionRetrievalResult>) 
     (total_num_of_transactions, total_transactions_size)
 }
 
-/// Formatting the requests and responses
+////////////////////////////////////////////////////////////////////////
+/// Formatting the requests and responses                             //
+////////////////////////////////////////////////////////////////////////
 impl std::fmt::Display for GetCollectionsRequest {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut result = "*** GetCollectionsRequest ***".to_string();
@@ -371,7 +375,6 @@ impl std::fmt::Display for GetCollectionsResponse {
             match r.retrieval_result.unwrap() {
                 RetrievalResult::Batch(message) => {
                     let batch_id = &message.id.unwrap();
-                    //let batch_id = &message.id.unwrap();
                     let mut transactions_size = 0;
                     let mut num_of_transactions = 0;
 
@@ -386,8 +389,6 @@ impl std::fmt::Display for GetCollectionsResponse {
                     );
                 }
                 RetrievalResult::Error(error) => {
-                    //let certificate_id = base64::encode(&error.id.unwrap().digest);
-
                     result = format!(
                         "{}\nError for certificate id {:?}, error: {}",
                         result,
@@ -497,14 +498,15 @@ fn println_and_into_inner<T>(result: Result<tonic::Response<T>, Status>) -> Opti
 where
     T: Display,
 {
-    if let Ok(response) = result {
-        let inner = response.into_inner();
-        println!("{}", &inner);
-
-        return Some(inner);
-    } else {
-        println!("{:?}", result.err().unwrap());
+    match result {
+        Ok(response) => {
+            let inner = response.into_inner();
+            println!("{}", &inner);
+            Some(inner)
+        }
+        Err(error) => {
+            println!("{:?}", error);
+            None
+        }
     }
-
-    None
 }
