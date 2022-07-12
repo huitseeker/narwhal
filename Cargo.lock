@@ -84,9 +84,9 @@ dependencies = [
  "ark-serialize",
  "ark-snark",
  "ark-std",
- "blake2",
+ "blake2 0.9.2",
  "derivative",
- "digest",
+ "digest 0.9.0",
  "rayon",
 ]
 
@@ -187,7 +187,7 @@ checksum = "1d6c2b318ee6e10f8c2853e73a83adc0ccb88995aa978d8a3408d492ab2ee671"
 dependencies = [
  "ark-serialize-derive",
  "ark-std",
- "digest",
+ "digest 0.9.0",
 ]
 
 [[package]]
@@ -446,8 +446,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0a4e37d16930f5459780f5621038b6382b9bb37c19016f39fb6b5808d831f174"
 dependencies = [
  "crypto-mac",
- "digest",
+ "digest 0.9.0",
  "opaque-debug",
+]
+
+[[package]]
+name = "blake2"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9cf849ee05b2ee5fba5e36f97ff8ec2533916700fc0758d40d92136a42f3388"
+dependencies = [
+ "digest 0.10.3",
 ]
 
 [[package]]
@@ -466,6 +475,15 @@ name = "block-buffer"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4152116fd6e9dadb291ae18fc1ec3575ed6d84c29642d97890f4b4a3417297e4"
+dependencies = [
+ "generic-array",
+]
+
+[[package]]
+name = "block-buffer"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bf7fe51849ea569fd452f37822f606a5cabb684dc918707a0193fd4664ff324"
 dependencies = [
  "generic-array",
 ]
@@ -684,7 +702,7 @@ version = "0.1.0"
 dependencies = [
  "arc-swap",
  "bincode",
- "blake2",
+ "blake2 0.10.4",
  "bytes",
  "config",
  "criterion",
@@ -832,7 +850,7 @@ dependencies = [
  "ark-std",
  "base64ct",
  "bincode",
- "blake2",
+ "blake2 0.10.4",
  "bls-crypto",
  "blst",
  "criterion",
@@ -848,6 +866,16 @@ dependencies = [
  "tokio",
  "workspace-hack",
  "zeroize",
+]
+
+[[package]]
+name = "crypto-common"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ccfd8c0ee4cce11e45b3fd6f9d5e69e0cc62912aa6a0cb1bf4617b0eba5a12f"
+dependencies = [
+ "generic-array",
+ "typenum",
 ]
 
 [[package]]
@@ -899,7 +927,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b9fdf9972b2bd6af2d913799d9ebc165ea4d2e65878e329d9c6b372c4491b61"
 dependencies = [
  "byteorder",
- "digest",
+ "digest 0.9.0",
  "rand_core 0.5.1",
  "subtle",
  "zeroize",
@@ -1098,6 +1126,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "digest"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2fb860ca6fafa5552fb6d0e816a69c8e49f0908bf524e30a90d97c85892d506"
+dependencies = [
+ "block-buffer 0.10.2",
+ "crypto-common",
+ "subtle",
+]
+
+[[package]]
 name = "downcast"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1154,7 +1193,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bincode",
- "blake2",
+ "blake2 0.10.4",
  "bytes",
  "config",
  "consensus",
@@ -2340,7 +2379,7 @@ dependencies = [
  "async-trait",
  "base64",
  "bincode",
- "blake2",
+ "blake2 0.10.4",
  "bytes",
  "config",
  "consensus",
@@ -3015,10 +3054,10 @@ version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4d58a1e1bf39749807d89cf2d98ac2dfa0ff1cb3faa38fbb64dd88ac8013d800"
 dependencies = [
- "block-buffer",
+ "block-buffer 0.9.0",
  "cfg-if",
  "cpufeatures",
- "digest",
+ "digest 0.9.0",
  "opaque-debug",
 ]
 
@@ -3239,7 +3278,7 @@ dependencies = [
  "arc-swap",
  "base64",
  "bincode",
- "blake2",
+ "blake2 0.10.4",
  "bytes",
  "config",
  "crypto",
@@ -3690,7 +3729,7 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "bincode",
- "blake2",
+ "blake2 0.10.4",
  "bytes",
  "config",
  "criterion",
@@ -4035,7 +4074,7 @@ dependencies = [
  "arc-swap",
  "async-trait",
  "bincode",
- "blake2",
+ "blake2 0.10.4",
  "bytes",
  "config",
  "crypto",
@@ -4101,9 +4140,9 @@ dependencies = [
  "bit-set",
  "bit-vec",
  "bitflags",
- "blake2",
+ "blake2 0.10.4",
  "blake2s_simd",
- "block-buffer",
+ "block-buffer 0.9.0",
  "bls-crypto",
  "blst",
  "bs58",
@@ -4147,7 +4186,7 @@ dependencies = [
  "derive_builder_macro",
  "diff",
  "difflib",
- "digest",
+ "digest 0.9.0",
  "downcast",
  "ed25519",
  "ed25519-dalek",

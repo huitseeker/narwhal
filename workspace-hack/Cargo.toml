@@ -43,7 +43,7 @@ bincode = { version = "1", default-features = false }
 bit-set = { version = "0.5", features = ["std"] }
 bit-vec = { version = "0.6", default-features = false, features = ["std"] }
 bitflags = { version = "1" }
-blake2 = { version = "0.9", features = ["std"] }
+blake2 = { version = "0.10", features = ["std"] }
 blake2s_simd = { version = "1", features = ["std"] }
 block-buffer = { version = "0.9", default-features = false }
 bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", features = ["compat"] }
