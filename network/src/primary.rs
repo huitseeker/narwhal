@@ -245,7 +245,7 @@ impl PrimaryToWorkerNetwork {
             .await
     }
 
-    pub async fn broadcast<T: VerifyingKey>(
+    pub async fn unreliable_broadcast<T: VerifyingKey>(
         &mut self,
         addresses: Vec<Multiaddr>,
         message: &PrimaryWorkerMessage<T>,
