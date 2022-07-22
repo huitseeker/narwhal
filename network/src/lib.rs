@@ -25,15 +25,15 @@ pub type MessageResult = Result<tonic::Response<types::Empty>, anyhow::Error>;
 
 #[derive(Debug)]
 #[must_use]
-pub struct CancelHandler<T>(pub tokio::task::JoinHandle<T>);
+pub struct CancelOnDropHandler<T>(tokio::task::JoinHandle<T>);
 
-impl<T> Drop for CancelHandler<T> {
+impl<T> Drop for CancelOnDropHandler<T> {
     fn drop(&mut self) {
         self.0.abort();
     }
 }
 
-impl<T> std::future::Future for CancelHandler<T> {
+impl<T> std::future::Future for CancelOnDropHandler<T> {
     type Output = T;
 
     fn poll(
