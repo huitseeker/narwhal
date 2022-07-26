@@ -10,12 +10,14 @@
 
 mod bounded_executor;
 mod primary;
+mod quorum_waiter;
 mod retry;
 mod worker;
 
 pub use crate::{
     bounded_executor::BoundedExecutor,
     primary::{PrimaryNetwork, PrimaryToWorkerNetwork},
+    quorum_waiter::QuorumWaiter,
     retry::RetryConfig,
     worker::{WorkerNetwork, WorkerToPrimaryNetwork},
 };

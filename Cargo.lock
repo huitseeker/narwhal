@@ -2260,6 +2260,7 @@ dependencies = [
  "backoff",
  "bincode",
  "bytes",
+ "config",
  "crypto",
  "futures",
  "multiaddr",
