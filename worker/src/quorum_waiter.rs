@@ -1,10 +1,9 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Committee, Stake, WorkerId};
+use config::{Committee, WorkerId};
 use crypto::traits::VerifyingKey;
-use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
-use network::{CancelOnDropHandler, MessageResult, WorkerNetwork};
+use network::WorkerNetwork;
 use tokio::{
     sync::{
         mpsc::{Receiver, Sender},
@@ -63,12 +62,6 @@ impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
         })
     }
 
-    /// Helper function. It waits for a future to complete and then delivers a value.
-    async fn waiter(wait_for: CancelOnDropHandler<MessageResult>, deliver: Stake) -> Stake {
-        let _ = wait_for.await;
-        deliver
-    }
-
     /// Main loop.
     async fn run(&mut self) {
         loop {
@@ -88,30 +81,27 @@ impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
                     let handlers = self.network.broadcast(addresses, &message).await;
 
                     // Collect all the handlers to receive acknowledgements.
-                    let mut wait_for_quorum: FuturesUnordered<_> = names
+                    let  wait_for_quorum= names
                         .into_iter()
                         .zip(handlers.into_iter())
                         .map(|(name, handler)| {
                             let stake = self.committee.stake(&name);
-                            Self::waiter(handler, stake)
-                        })
-                        .collect();
+                            (handler, stake)
+                        });
 
                     // Wait for the first 2f nodes to send back an Ack. Then we consider the batch
                     // delivered and we send its digest to the primary (that will include it into
                     // the dag). This should reduce the amount of synching.
                     let threshold = self.committee.quorum_threshold();
-                    let mut total_stake = self.committee.stake(&self.name);
+                    let wfq = network::QuorumWaiter::new(wait_for_quorum, threshold);
+
                     loop {
                         tokio::select! {
-                            Some(stake) = wait_for_quorum.next() => {
-                                total_stake += stake;
-                                if total_stake >= threshold {
+                            () = wfq => {
                                     if self.tx_batch.send(serialized).await.is_err() {
                                         tracing::debug!("{}", DagError::ShuttingDown);
                                     }
                                     break;
-                                }
                             }
 
                             result = self.rx_reconfigure.changed() => {

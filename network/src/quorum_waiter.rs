@@ -17,7 +17,7 @@ pub struct QuorumWaiter {
 }
 
 impl QuorumWaiter {
-    pub fn new<F: Future<Output = ()> + Send + 'static, I: IntoIterator<Item = (F, Stake)>>(
+    pub fn new<T, F: Future<Output = T> + Send + 'static, I: IntoIterator<Item = (F, Stake)>>(
         handlers: I,
         threshold_stake: Stake,
     ) -> Self {
