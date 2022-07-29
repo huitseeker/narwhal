@@ -1271,7 +1271,7 @@ checksum = "c762bae6dcaf24c4c84667b8579785430908723d5c889f469d76a41d59cc7a9d"
 dependencies = [
  "curve25519-dalek",
  "ed25519",
- "merlin",
+ "merlin 2.0.1",
  "rand 0.7.3",
  "serde",
  "serde_bytes",
@@ -2069,6 +2069,18 @@ dependencies = [
  "byteorder",
  "keccak",
  "rand_core 0.5.1",
+ "zeroize",
+]
+
+[[package]]
+name = "merlin"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58c38e2799fc0978b65dfff8023ec7843e2330bb462f19198840b34b6582397d"
+dependencies = [
+ "byteorder",
+ "keccak",
+ "rand_core 0.6.3",
  "zeroize",
 ]
 
@@ -4848,7 +4860,7 @@ dependencies = [
  "matchit",
  "memchr",
  "memoffset",
- "merlin",
+ "merlin 3.0.0",
  "mime",
  "minimal-lexical",
  "miniz_oxide",

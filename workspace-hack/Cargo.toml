@@ -165,7 +165,7 @@ matches = { version = "0.1", default-features = false }
 matchit = { version = "0.5" }
 memchr = { version = "2", features = ["std"] }
 memoffset = { version = "0.6" }
-merlin = { version = "2", default-features = false }
+merlin = { version = "3", default-features = false }
 mime = { version = "0.3", default-features = false }
 miniz_oxide = { version = "0.5", default-features = false }
 mio = { version = "0.8", features = ["net", "os-ext", "os-poll"] }
