@@ -248,6 +248,16 @@ impl Core {
             return Ok(());
         }
 
+        // Can we process this header yet? If not, the synchronizer will reschedule the processing of this header once it is.
+        if self.synchronizer.too_soon(header).await {
+            self.metrics
+                .headers_suspended
+                .with_label_values(&[&header.epoch.to_string(), "in_future"])
+                .inc();
+            debug!("Processing of {header} suspended: time stamp too far in the future");
+            return Ok(());
+        }
+
         // Store the header.
         self.header_store.write(header.id, header.clone()).await;
 

@@ -39,6 +39,10 @@ async fn propose_empty() {
     let header = rx_headers.recv().await.unwrap();
     assert_eq!(header.round, 1);
     assert!(header.payload.is_empty());
+    assert!(
+        Duration::from_secs(header.timestamp)
+            <= SystemTime::now().duration_since(UNIX_EPOCH).unwrap()
+    );
     assert!(header.verify(&committee(None)).is_ok());
 }
 
@@ -82,5 +86,9 @@ async fn propose_payload() {
     let header = rx_headers.recv().await.unwrap();
     assert_eq!(header.round, 1);
     assert_eq!(header.payload.get(&digest), Some(&worker_id));
+    assert!(
+        Duration::from_secs(header.timestamp)
+            <= SystemTime::now().duration_since(UNIX_EPOCH).unwrap()
+    );
     assert!(header.verify(&committee(None)).is_ok());
 }

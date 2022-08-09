@@ -26,6 +26,9 @@ use std::{
 /// The round number.
 pub type Round = u64;
 
+/// Timestamp in seconds since the unix epoch
+pub type Timestamp = u64;
+
 pub type Transaction = Vec<u8>;
 #[derive(Clone, Serialize, Deserialize, Default, Debug, PartialEq, Eq, Arbitrary)]
 pub struct Batch(pub Vec<Transaction>);
@@ -73,6 +76,7 @@ pub struct Header {
     pub author: PublicKey,
     pub round: Round,
     pub epoch: Epoch,
+    pub timestamp: Timestamp,
     #[serde(with = "indexmap::serde_seq")]
     pub payload: IndexMap<BatchDigest, WorkerId>,
     pub parents: BTreeSet<CertificateDigest>,
@@ -89,6 +93,7 @@ impl HeaderBuilder {
             author: self.author.unwrap(),
             round: self.round.unwrap(),
             epoch: self.epoch.unwrap(),
+            timestamp: self.epoch.unwrap(),
             payload: self.payload.unwrap(),
             parents: self.parents.unwrap(),
             id: HeaderDigest::default(),
@@ -120,6 +125,7 @@ impl Header {
         author: PublicKey,
         round: Round,
         epoch: Epoch,
+        timestamp: Timestamp,
         payload: IndexMap<BatchDigest, WorkerId>,
         parents: BTreeSet<CertificateDigest>,
         signature_service: &mut SignatureService<Signature>,
@@ -128,6 +134,7 @@ impl Header {
             author,
             round,
             epoch,
+            timestamp,
             payload,
             parents,
             id: HeaderDigest::default(),

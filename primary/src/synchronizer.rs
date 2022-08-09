@@ -1,11 +1,18 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{header_waiter::WaiterMessage, primary::PayloadToken};
+use crate::{
+    header_waiter::{HeaderWaiter, WaiterMessage},
+    primary::PayloadToken,
+};
 use config::{Committee, WorkerId};
 use consensus::dag::Dag;
 use crypto::{Hash as _, PublicKey};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use store::Store;
 use types::{
     error::DagResult, metered_channel::Sender, BatchDigest, Certificate, CertificateDigest, Header,
@@ -139,6 +146,24 @@ impl Synchronizer {
             .await
             .expect("Failed to send sync parents request");
         Ok(Vec::new())
+    }
+
+    /// Checks whether the header timestamp is at most `HeaderWaiter::GRACE_PERIOD` secondsinto the future
+    pub async fn too_soon(&mut self, header: &Header) -> bool {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System Time should be after UNIX epoch")
+            + HeaderWaiter::GRACE_PERIOD;
+        let header_timestamp = Duration::from_secs(header.timestamp);
+        if now <= header_timestamp {
+            self.tx_header_waiter
+                .send(WaiterMessage::WaitUntilProcessable(header.clone()))
+                .await
+                .expect("Failed to send sync wait until processable request");
+            true
+        } else {
+            false
+        }
     }
 
     /// Check whether we have seen all the ancestors of the certificate. If we don't, send the

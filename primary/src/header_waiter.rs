@@ -22,7 +22,7 @@ use store::Store;
 use tokio::{
     sync::{oneshot, watch},
     task::JoinHandle,
-    time::{sleep, Duration, Instant},
+    time::{self, sleep, Duration, Instant},
 };
 use tracing::{debug, error, info};
 use types::{
@@ -45,6 +45,7 @@ const TIMER_RESOLUTION: u64 = 1_000;
 pub enum WaiterMessage {
     SyncBatches(HashMap<BatchDigest, WorkerId>, Header),
     SyncParents(Vec<CertificateDigest>, Header),
+    WaitUntilProcessable(Header),
 }
 
 /// Waits for missing parent certificates and batches' digests.
@@ -167,6 +168,29 @@ impl HeaderWaiter {
         }
     }
 
+    /// A timestamp *can* be processed if it's at most GRACE_PERIOD seconds into the future
+    pub const GRACE_PERIOD: Duration = Duration::from_secs(15);
+
+    /// Helper function. It waits until a header is at most GRACE_PERIOD seconds into the future,
+    /// and then delivers it.
+    async fn time_waiter(
+        deliver: Header,
+        handler: oneshot::Receiver<()>,
+    ) -> DagResult<Option<Header>> {
+        let time_stamp = Duration::from_secs(deliver.timestamp);
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time should not be before unix epoch!");
+        let wait_for = time_stamp
+            .saturating_sub(now)
+            .saturating_sub(Self::GRACE_PERIOD);
+        let wait_for_deadline = time::sleep(wait_for);
+        tokio::select! {
+            _ = wait_for_deadline => Ok(Some(deliver)),
+            _ = handler => Ok(None),
+        }
+    }
+
     /// Main loop listening to the `Synchronizer` messages.
     async fn run(&mut self) {
         let mut waiting: FuturesUnordered<BoxFuture<'_, _>> = FuturesUnordered::new();
@@ -268,6 +292,17 @@ impl HeaderWaiter {
                                 let message = PrimaryMessage::CertificatesRequest(requires_sync, self.name.clone());
                                 self.primary_network.unreliable_send(address, &message).await;
                             }
+                        },
+                        WaiterMessage::WaitUntilProcessable(header) => {
+                            debug!("Waiting for {header} to become processable");
+                            let header_id = header.id;
+                            let round = header.round;
+
+                            let (tx_cancel, rx_cancel) = oneshot::channel();
+                            self.pending.insert(header_id, (round, tx_cancel));
+                            let fut = Self::time_waiter(header, rx_cancel);
+                            // pointer-size allocation, bounded by the # of blocks (may eventually go away, see rust RFC #1909)
+                            waiting.push(Box::pin(fut));
                         }
                     }
                 },

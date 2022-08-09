@@ -49,6 +49,7 @@ Header:
         TYPENAME: Ed25519PublicKey
     - round: U64
     - epoch: U64
+    - timestamp: U64
     - payload:
         SEQ:
           TUPLE:

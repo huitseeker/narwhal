@@ -4,7 +4,12 @@
 use crate::{metrics::PrimaryMetrics, NetworkModel};
 use config::{Committee, Epoch, WorkerId};
 use crypto::{Digest, Hash as _, PublicKey, Signature, SignatureService};
-use std::{cmp::Ordering, sync::Arc};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tokio::{
     sync::watch,
     task::JoinHandle,
@@ -14,7 +19,7 @@ use tracing::{debug, info};
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    BatchDigest, Certificate, Header, ReconfigureNotification, Round,
+    BatchDigest, Certificate, CertificateDigest, Header, ReconfigureNotification, Round, Timestamp,
 };
 
 #[cfg(test)]
@@ -101,13 +106,36 @@ impl Proposer {
     }
 
     async fn make_header(&mut self) -> DagResult<()> {
+        // This initial step removes duplicates
+        let parents: HashMap<CertificateDigest, Timestamp> = self
+            .last_parents
+            .drain(..)
+            .map(|cert| (cert.digest(), cert.header.timestamp))
+            .collect();
+        // Block median timestamp computation
+        let (parent_digests, mut parent_timestamps): (BTreeSet<CertificateDigest>, Vec<Timestamp>) =
+            parents.into_iter().unzip();
+        let median_position = parent_timestamps.len() / 2;
+        let (_, median_timestamp, _) = parent_timestamps.select_nth_unstable(median_position);
+        let now_as_epoch_offset = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime::now falls before the UNIX epoch")
+            .as_secs();
+
+        let block_time = if *median_timestamp > now_as_epoch_offset {
+            *median_timestamp
+        } else {
+            now_as_epoch_offset
+        };
+
         // Make a new header.
         let header = Header::new(
             self.name.clone(),
             self.round,
             self.committee.epoch(),
+            block_time,
             self.digests.drain(..).collect(),
-            self.last_parents.drain(..).map(|x| x.digest()).collect(),
+            parent_digests,
             &mut self.signature_service,
         )
         .await;
