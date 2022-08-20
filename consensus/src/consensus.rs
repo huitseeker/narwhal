@@ -172,7 +172,8 @@ pub trait ConsensusProtocol {
 pub struct Consensus<ConsensusProtocol> {
     /// The committee information.
     committee: Committee,
-
+    // The consensus state (everything else is immutable).
+    state: ConsensusState,
     /// Receive reconfiguration update.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receives new certificates from the primary. The primary should send us new certificates only
@@ -201,23 +202,22 @@ where
     #[must_use]
     pub fn spawn(
         committee: Committee,
+        state: ConsensusState,
         store: Arc<ConsensusStore>,
-        cert_store: CertificateStore,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_primary: metered_channel::Receiver<Certificate>,
         tx_primary: metered_channel::Sender<Certificate>,
         tx_output: metered_channel::Sender<ConsensusOutput>,
         protocol: Protocol,
         metrics: Arc<ConsensusMetrics>,
-        gc_depth: Round,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             let consensus_index = store
                 .read_last_consensus_index()
                 .expect("Failed to load consensus index from store");
-            let recovered_last_committed = store.read_last_committed();
             Self {
                 committee,
+                state,
                 rx_reconfigure,
                 rx_primary,
                 tx_primary,
@@ -226,7 +226,7 @@ where
                 protocol,
                 metrics,
             }
-            .run(recovered_last_committed, cert_store, gc_depth)
+            .run()
             .await
             .expect("Failed to run consensus")
         })
@@ -242,23 +242,7 @@ where
         Ok(ConsensusState::new(genesis, self.metrics.clone()))
     }
 
-    async fn run(
-        &mut self,
-        recover_last_committed: HashMap<PublicKey, Round>,
-        cert_store: CertificateStore,
-        gc_depth: Round,
-    ) -> StoreResult<()> {
-        // The consensus state (everything else is immutable).
-        let genesis = Certificate::genesis(&self.committee);
-        let mut state = ConsensusState::new_from_store(
-            genesis,
-            self.metrics.clone(),
-            recover_last_committed,
-            cert_store,
-            gc_depth,
-        )
-        .await;
-
+    async fn run(&mut self) -> StoreResult<()> {
         // Listen to incoming certificates.
         loop {
             tokio::select! {
@@ -270,7 +254,7 @@ where
                             let message = self.rx_reconfigure.borrow_and_update().clone();
                             match message  {
                                 ReconfigureNotification::NewEpoch(new_committee) => {
-                                    state = self.change_epoch(new_committee)?;
+                                    self.state = self.change_epoch(new_committee)?;
                                 },
                                 ReconfigureNotification::UpdateCommittee(new_committee) => {
                                     self.committee = new_committee;
@@ -292,7 +276,7 @@ where
                     // Process the certificate using the selected consensus protocol.
                     let sequence =
                         self.protocol
-                            .process_certificate(&mut state, self.consensus_index, certificate)?;
+                            .process_certificate(&mut self.state, self.consensus_index, certificate)?;
 
                     // Update the consensus index.
                     self.consensus_index += sequence.len() as u64;
@@ -324,7 +308,7 @@ where
                     self.metrics
                         .consensus_dag_rounds
                         .with_label_values(&[])
-                        .set(state.dag.len() as i64);
+                        .set(self.state.dag.len() as i64);
                 },
 
                 // Check whether the committee changed.
@@ -333,7 +317,7 @@ where
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
                         ReconfigureNotification::NewEpoch(new_committee) => {
-                            state = self.change_epoch(new_committee)?;
+                            self.state = self.change_epoch(new_committee)?;
                         },
                         ReconfigureNotification::UpdateCommittee(new_committee) => {
                             self.committee = new_committee;
