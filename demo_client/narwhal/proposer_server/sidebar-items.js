@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["ProposerServer",""],["_Inner",""]],"trait":[["Proposer","Generated trait containing gRPC methods that should be implemented for use with ProposerServer."]]};

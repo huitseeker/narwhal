@@ -1,9 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `primary/src/primary.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>primary.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../ayu.css" disabled><link rel="stylesheet" type="text/css" href="../../dark.css" disabled><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script src="../../crates.js"></script><script defer src="../../main.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script>
-    <noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../../primary/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div>
-        </a><h2 class="location"></h2>
-    </nav>
-    <nav class="sidebar"><a class="sidebar-logo" href="../../primary/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div>
-        </a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../primary/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><nav class="sub"><div class="theme-picker hidden"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu" title="themes"><img width="22" height="22" alt="Pick another theme!" src="../../brush.svg"></button><div id="theme-choices" role="menu"></div></div><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><button type="button" id="help-button" title="help">?</button><a id="settings-menu" href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="line-numbers"><span id="1">1</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `primary/src/primary.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>primary.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../../primary/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div></a><h2 class="location"></h2></nav><nav class="sidebar"><a class="sidebar-logo" href="../../primary/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div></a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../primary/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><button type="button">?</button></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="line-numbers"><span id="1">1</span>
 <span id="2">2</span>
 <span id="3">3</span>
 <span id="4">4</span>
@@ -455,458 +450,981 @@
 <span id="450">450</span>
 <span id="451">451</span>
 <span id="452">452</span>
-</pre><pre class="rust"><code><span class="comment">// Copyright (c) 2021, Facebook, Inc. and its affiliates</span>
-<span class="comment">// Copyright (c) 2022, Mysten Labs, Inc.</span>
-<span class="comment">// SPDX-License-Identifier: Apache-2.0</span>
-<span class="kw">use</span> <span class="kw">crate</span>::{
-    <span class="ident">block_remover::DeleteBatchResult</span>,
-    <span class="ident">block_synchronizer::BlockSynchronizer</span>,
-    <span class="ident">block_waiter</span>::{<span class="ident">BatchMessageError</span>, <span class="ident">BatchResult</span>, <span class="ident">BlockWaiter</span>},
-    <span class="ident">certificate_waiter::CertificateWaiter</span>,
-    <span class="ident">core::Core</span>,
-    <span class="ident">garbage_collector::GarbageCollector</span>,
-    <span class="ident">grpc_server::ConsensusAPIGrpc</span>,
-    <span class="ident">header_waiter::HeaderWaiter</span>,
-    <span class="ident">helper::Helper</span>,
-    <span class="ident">payload_receiver::PayloadReceiver</span>,
-    <span class="ident">proposer::Proposer</span>,
-    <span class="ident">synchronizer::Synchronizer</span>,
-    <span class="ident">BlockRemover</span>, <span class="ident">CertificatesResponse</span>, <span class="ident">DeleteBatchMessage</span>, <span class="ident">PayloadAvailabilityResponse</span>,
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
+<span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
+<span id="480">480</span>
+<span id="481">481</span>
+<span id="482">482</span>
+<span id="483">483</span>
+<span id="484">484</span>
+<span id="485">485</span>
+<span id="486">486</span>
+<span id="487">487</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
+<span id="548">548</span>
+<span id="549">549</span>
+<span id="550">550</span>
+<span id="551">551</span>
+<span id="552">552</span>
+<span id="553">553</span>
+<span id="554">554</span>
+<span id="555">555</span>
+<span id="556">556</span>
+<span id="557">557</span>
+<span id="558">558</span>
+<span id="559">559</span>
+<span id="560">560</span>
+<span id="561">561</span>
+<span id="562">562</span>
+<span id="563">563</span>
+<span id="564">564</span>
+<span id="565">565</span>
+<span id="566">566</span>
+<span id="567">567</span>
+<span id="568">568</span>
+<span id="569">569</span>
+<span id="570">570</span>
+<span id="571">571</span>
+<span id="572">572</span>
+<span id="573">573</span>
+<span id="574">574</span>
+<span id="575">575</span>
+<span id="576">576</span>
+<span id="577">577</span>
+<span id="578">578</span>
+<span id="579">579</span>
+<span id="580">580</span>
+<span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+<span id="584">584</span>
+<span id="585">585</span>
+<span id="586">586</span>
+<span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
+<span id="619">619</span>
+<span id="620">620</span>
+<span id="621">621</span>
+<span id="622">622</span>
+<span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
+<span id="629">629</span>
+<span id="630">630</span>
+<span id="631">631</span>
+<span id="632">632</span>
+<span id="633">633</span>
+<span id="634">634</span>
+<span id="635">635</span>
+<span id="636">636</span>
+<span id="637">637</span>
+<span id="638">638</span>
+<span id="639">639</span>
+<span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
+<span id="646">646</span>
+<span id="647">647</span>
+<span id="648">648</span>
+<span id="649">649</span>
+<span id="650">650</span>
+<span id="651">651</span>
+<span id="652">652</span>
+<span id="653">653</span>
+<span id="654">654</span>
+<span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
+<span id="667">667</span>
+<span id="668">668</span>
+<span id="669">669</span>
+<span id="670">670</span>
+<span id="671">671</span>
+<span id="672">672</span>
+<span id="673">673</span>
+<span id="674">674</span>
+<span id="675">675</span>
+<span id="676">676</span>
+<span id="677">677</span>
+<span id="678">678</span>
+<span id="679">679</span>
+<span id="680">680</span>
+<span id="681">681</span>
+<span id="682">682</span>
+<span id="683">683</span>
+<span id="684">684</span>
+<span id="685">685</span>
+<span id="686">686</span>
+<span id="687">687</span>
+<span id="688">688</span>
+<span id="689">689</span>
+<span id="690">690</span>
+<span id="691">691</span>
+<span id="692">692</span>
+<span id="693">693</span>
+<span id="694">694</span>
+<span id="695">695</span>
+<span id="696">696</span>
+<span id="697">697</span>
+<span id="698">698</span>
+<span id="699">699</span>
+<span id="700">700</span>
+<span id="701">701</span>
+<span id="702">702</span>
+<span id="703">703</span>
+<span id="704">704</span>
+<span id="705">705</span>
+<span id="706">706</span>
+<span id="707">707</span>
+<span id="708">708</span>
+<span id="709">709</span>
+<span id="710">710</span>
+<span id="711">711</span>
+<span id="712">712</span>
+<span id="713">713</span>
+<span id="714">714</span>
+</pre><pre class="rust"><code><span class="comment">// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+</span><span class="kw">use crate</span>::{
+    block_remover::DeleteBatchResult,
+    block_synchronizer::{handler::BlockSynchronizerHandler, BlockSynchronizer},
+    block_waiter::{BatchMessageError, BatchResult, BlockWaiter},
+    certificate_waiter::CertificateWaiter,
+    core::Core,
+    grpc_server::ConsensusAPIGrpc,
+    header_waiter::HeaderWaiter,
+    helper::Helper,
+    metrics::{initialise_metrics, PrimaryEndpointMetrics, PrimaryMetrics},
+    payload_receiver::PayloadReceiver,
+    proposer::Proposer,
+    state_handler::StateHandler,
+    synchronizer::Synchronizer,
+    BlockCommand, BlockRemover, CertificatesResponse, DeleteBatchMessage,
+    PayloadAvailabilityResponse,
 };
-<span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
-<span class="kw">use</span> <span class="ident">config</span>::{<span class="ident">Committee</span>, <span class="ident">Parameters</span>, <span class="ident">WorkerId</span>};
-<span class="kw">use</span> <span class="ident">crypto</span>::{
-    <span class="ident">traits</span>::{<span class="ident">EncodeDecodeBase64</span>, <span class="ident">Signer</span>, <span class="ident">VerifyingKey</span>},
-    <span class="ident">SignatureService</span>,
+<span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId, WorkerInfo};
+<span class="kw">use </span>consensus::dag::Dag;
+<span class="kw">use </span>crypto::{PublicKey, Signature};
+<span class="kw">use </span>fastcrypto::{
+    traits::{EncodeDecodeBase64, Signer},
+    SignatureService,
 };
-<span class="kw">use</span> <span class="ident">network</span>::{<span class="ident">PrimaryNetwork</span>, <span class="ident">PrimaryToWorkerNetwork</span>};
-<span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
-<span class="kw">use</span> <span class="ident">std</span>::{
-    <span class="ident">net</span>::{<span class="ident">IpAddr</span>, <span class="ident">Ipv4Addr</span>, <span class="ident">SocketAddr</span>},
-    <span class="ident">sync</span>::{<span class="ident">atomic::AtomicU64</span>, <span class="ident">Arc</span>},
+<span class="kw">use </span>multiaddr::{Multiaddr, Protocol};
+<span class="kw">use </span>network::{metrics::Metrics, PrimaryNetwork, PrimaryToWorkerNetwork};
+<span class="kw">use </span>prometheus::Registry;
+<span class="kw">use </span>std::{collections::BTreeMap, net::Ipv4Addr, sync::Arc};
+<span class="kw">use </span>storage::CertificateStore;
+<span class="kw">use </span>store::Store;
+<span class="kw">use </span>tokio::{sync::watch, task::JoinHandle};
+<span class="kw">use </span>tonic::{Request, Response, Status};
+<span class="kw">use </span>tracing::info;
+<span class="kw">use </span>types::{
+    error::DagError,
+    metered_channel::{channel, Receiver, Sender},
+    BatchDigest, BatchMessage, BincodeEncodedPayload, Certificate, Empty, Header, HeaderDigest,
+    PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification, WorkerInfoResponse,
+    WorkerPrimaryError, WorkerPrimaryMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
-<span class="kw">use</span> <span class="ident">store::Store</span>;
-<span class="kw">use</span> <span class="ident">thiserror::Error</span>;
-<span class="kw">use</span> <span class="ident">tokio::sync::mpsc</span>::{<span class="ident">channel</span>, <span class="ident">Receiver</span>, <span class="ident">Sender</span>};
-<span class="kw">use</span> <span class="ident">tonic</span>::{<span class="ident">Request</span>, <span class="ident">Response</span>, <span class="ident">Status</span>};
-<span class="kw">use</span> <span class="ident">tracing::info</span>;
-<span class="kw">use</span> <span class="ident">types</span>::{
-    <span class="ident">Batch</span>, <span class="ident">BatchDigest</span>, <span class="ident">BatchMessage</span>, <span class="ident">BincodeEncodedPayload</span>, <span class="ident">Certificate</span>, <span class="ident">CertificateDigest</span>, <span class="ident">Empty</span>,
-    <span class="ident">Header</span>, <span class="ident">HeaderDigest</span>, <span class="ident">PrimaryToPrimary</span>, <span class="ident">PrimaryToPrimaryServer</span>, <span class="ident">WorkerToPrimary</span>,
-    <span class="ident">WorkerToPrimaryServer</span>,
-};
+<span class="kw">pub use </span>types::{PrimaryMessage, PrimaryWorkerMessage};
 
-<span class="doccomment">/// The default channel capacity for each channel of the primary.</span>
-<span class="kw">pub</span> <span class="kw">const</span> <span class="ident">CHANNEL_CAPACITY</span>: <span class="ident">usize</span> <span class="op">=</span> <span class="number">1_000</span>;
+<span class="doccomment">/// The default channel capacity for each channel of the primary.
+</span><span class="kw">pub const </span>CHANNEL_CAPACITY: usize = <span class="number">1_000</span>;
 
-<span class="kw">pub</span> <span class="kw">use</span> <span class="ident">types</span>::{<span class="ident">PrimaryMessage</span>, <span class="ident">PrimaryWorkerMessage</span>};
+<span class="comment">// A type alias marking the &quot;payload&quot; tokens sent by workers to their primary as batch acknowledgements
+</span><span class="kw">pub type </span>PayloadToken = u8;
 
-<span class="doccomment">/// The messages sent by the workers to their primary.</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">PartialEq</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">WorkerPrimaryMessage</span> {
-    <span class="doccomment">/// The worker indicates it sealed a new batch.</span>
-    <span class="ident">OurBatch</span>(<span class="ident">BatchDigest</span>, <span class="ident">WorkerId</span>),
-    <span class="doccomment">/// The worker indicates it received a batch&#39;s digest from another authority.</span>
-    <span class="ident">OthersBatch</span>(<span class="ident">BatchDigest</span>, <span class="ident">WorkerId</span>),
-    <span class="doccomment">/// The worker sends a requested batch</span>
-    <span class="ident">RequestedBatch</span>(<span class="ident">BatchDigest</span>, <span class="ident">Batch</span>),
-    <span class="doccomment">/// When batches are successfully deleted, this message is sent dictating the</span>
-    <span class="doccomment">/// batches that have been deleted from the worker.</span>
-    <span class="ident">DeletedBatches</span>(<span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">BatchDigest</span><span class="op">&gt;</span>),
-    <span class="doccomment">/// An error has been returned by worker</span>
-    <span class="ident">Error</span>(<span class="ident">WorkerPrimaryError</span>),
+<span class="doccomment">/// The network model in which the primary operates.
+</span><span class="kw">pub enum </span>NetworkModel {
+    PartiallySynchronous,
+    Asynchronous,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">Error</span>, <span class="ident">Clone</span>, <span class="ident">PartialEq</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">WorkerPrimaryError</span> {
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Batch with id {0} has not been found&quot;</span>)]</span>
-    <span class="ident">RequestedBatchNotFound</span>(<span class="ident">BatchDigest</span>),
+<span class="kw">pub struct </span>Primary;
 
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;An error occurred while deleting batches. None deleted&quot;</span>)]</span>
-    <span class="ident">ErrorWhileDeletingBatches</span>(<span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">BatchDigest</span><span class="op">&gt;</span>),
-}
+<span class="kw">impl </span>Primary {
+    <span class="kw">const </span>INADDR_ANY: Ipv4Addr = Ipv4Addr::new(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>);
 
-<span class="comment">// A type alias marking the &quot;payload&quot; tokens sent by workers to their primary as batch acknowledgements</span>
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">PayloadToken</span> <span class="op">=</span> <span class="ident">u8</span>;
+    <span class="comment">// Spawns the primary and returns the JoinHandles of its tasks, as well as a metered receiver for the Consensus.
+    </span><span class="attribute">#[allow(clippy::too_many_arguments)]
+    </span><span class="kw">pub fn </span>spawn&lt;Signatory: Signer&lt;Signature&gt; + Send + <span class="lifetime">&#39;static</span>&gt;(
+        name: PublicKey,
+        signer: Signatory,
+        committee: SharedCommittee,
+        worker_cache: SharedWorkerCache,
+        parameters: Parameters,
+        header_store: Store&lt;HeaderDigest, Header&gt;,
+        certificate_store: CertificateStore,
+        payload_store: Store&lt;(BatchDigest, WorkerId), PayloadToken&gt;,
+        tx_consensus: Sender&lt;Certificate&gt;,
+        rx_consensus: Receiver&lt;Certificate&gt;,
+        tx_get_block_commands: Sender&lt;BlockCommand&gt;,
+        rx_get_block_commands: Receiver&lt;BlockCommand&gt;,
+        dag: <span class="prelude-ty">Option</span>&lt;Arc&lt;Dag&gt;&gt;,
+        network_model: NetworkModel,
+        tx_reconfigure: watch::Sender&lt;ReconfigureNotification&gt;,
+        tx_committed_certificates: Sender&lt;Certificate&gt;,
+        registry: <span class="kw-2">&amp;</span>Registry,
+    ) -&gt; Vec&lt;JoinHandle&lt;()&gt;&gt; {
+        <span class="comment">// Write the parameters to the logs.
+        </span>parameters.tracing();
 
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Primary</span>;
+        <span class="comment">// Initialize the metrics
+        </span><span class="kw">let </span>metrics = initialise_metrics(registry);
+        <span class="kw">let </span>endpoint_metrics = metrics.endpoint_metrics.unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>primary_channel_metrics = metrics.primary_channel_metrics.unwrap();
+        <span class="kw">let </span>primary_endpoint_metrics = metrics.primary_endpoint_metrics.unwrap();
+        <span class="kw">let </span>node_metrics = Arc::new(metrics.node_metrics.unwrap());
+        <span class="kw">let </span>network_metrics = Arc::new(metrics.network_metrics.unwrap());
 
-<span class="kw">impl</span> <span class="ident">Primary</span> {
-    <span class="kw">const</span> <span class="ident">INADDR_ANY</span>: <span class="ident">IpAddr</span> <span class="op">=</span> <span class="ident">IpAddr::V4</span>(<span class="ident">Ipv4Addr::new</span>(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>));
+        <span class="kw">let </span>(tx_others_digests, rx_others_digests) =
+            channel(CHANNEL_CAPACITY, <span class="kw-2">&amp;</span>primary_channel_metrics.tx_others_digests);
+        <span class="kw">let </span>(tx_our_digests, rx_our_digests) =
+            channel(CHANNEL_CAPACITY, <span class="kw-2">&amp;</span>primary_channel_metrics.tx_our_digests);
+        <span class="kw">let </span>(tx_parents, rx_parents) =
+            channel(CHANNEL_CAPACITY, <span class="kw-2">&amp;</span>primary_channel_metrics.tx_parents);
+        <span class="kw">let </span>(tx_headers, rx_headers) =
+            channel(CHANNEL_CAPACITY, <span class="kw-2">&amp;</span>primary_channel_metrics.tx_headers);
+        <span class="kw">let </span>(tx_sync_headers, rx_sync_headers) =
+            channel(CHANNEL_CAPACITY, <span class="kw-2">&amp;</span>primary_channel_metrics.tx_sync_headers);
+        <span class="kw">let </span>(tx_sync_certificates, rx_sync_certificates) = channel(
+            CHANNEL_CAPACITY,
+            <span class="kw-2">&amp;</span>primary_channel_metrics.tx_sync_certificates,
+        );
+        <span class="kw">let </span>(tx_headers_loopback, rx_headers_loopback) = channel(
+            CHANNEL_CAPACITY,
+            <span class="kw-2">&amp;</span>primary_channel_metrics.tx_headers_loopback,
+        );
+        <span class="kw">let </span>(tx_certificates_loopback, rx_certificates_loopback) = channel(
+            CHANNEL_CAPACITY,
+            <span class="kw-2">&amp;</span>primary_channel_metrics.tx_certificates_loopback,
+        );
+        <span class="kw">let </span>(tx_primary_messages, rx_primary_messages) = channel(
+            CHANNEL_CAPACITY,
+            <span class="kw-2">&amp;</span>primary_channel_metrics.tx_primary_messages,
+        );
+        <span class="kw">let </span>(tx_helper_requests, rx_helper_requests) = channel(
+            CHANNEL_CAPACITY,
+            <span class="kw-2">&amp;</span>primary_channel_metrics.tx_helper_requests,
+        );
+        <span class="kw">let </span>(tx_batches, rx_batches) =
+            channel(CHANNEL_CAPACITY, <span class="kw-2">&amp;</span>primary_channel_metrics.tx_batches);
+        <span class="kw">let </span>(tx_block_removal_commands, rx_block_removal_commands) = channel(
+            CHANNEL_CAPACITY,
+            <span class="kw-2">&amp;</span>primary_channel_metrics.tx_block_removal_commands,
+        );
+        <span class="kw">let </span>(tx_batch_removal, rx_batch_removal) =
+            channel(CHANNEL_CAPACITY, <span class="kw-2">&amp;</span>primary_channel_metrics.tx_batch_removal);
+        <span class="kw">let </span>(tx_block_synchronizer_commands, rx_block_synchronizer_commands) = channel(
+            CHANNEL_CAPACITY,
+            <span class="kw-2">&amp;</span>primary_channel_metrics.tx_block_synchronizer_commands,
+        );
+        <span class="kw">let </span>(tx_certificate_responses, rx_certificate_responses) = channel(
+            CHANNEL_CAPACITY,
+            <span class="kw-2">&amp;</span>primary_channel_metrics.tx_certificate_responses,
+        );
+        <span class="kw">let </span>(tx_payload_availability_responses, rx_payload_availability_responses) = channel(
+            CHANNEL_CAPACITY,
+            <span class="kw-2">&amp;</span>primary_channel_metrics.tx_payload_availability_responses,
+        );
+        <span class="kw">let </span>(tx_state_handler, rx_state_handler) =
+            channel(CHANNEL_CAPACITY, <span class="kw-2">&amp;</span>primary_channel_metrics.tx_state_handler);
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">spawn</span><span class="op">&lt;</span><span class="ident">PublicKey</span>: <span class="ident">VerifyingKey</span>, <span class="ident">Signatory</span>: <span class="ident">Signer</span><span class="op">&lt;</span><span class="ident">PublicKey::Sig</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="lifetime">&#39;static</span><span class="op">&gt;</span>(
-        <span class="ident">name</span>: <span class="ident">PublicKey</span>,
-        <span class="ident">signer</span>: <span class="ident">Signatory</span>,
-        <span class="ident">committee</span>: <span class="ident">Committee</span><span class="op">&lt;</span><span class="ident">PublicKey</span><span class="op">&gt;</span>,
-        <span class="ident">parameters</span>: <span class="ident">Parameters</span>,
-        <span class="ident">header_store</span>: <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">HeaderDigest</span>, <span class="ident">Header</span><span class="op">&lt;</span><span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-        <span class="ident">certificate_store</span>: <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">CertificateDigest</span>, <span class="ident">Certificate</span><span class="op">&lt;</span><span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-        <span class="ident">payload_store</span>: <span class="ident">Store</span><span class="op">&lt;</span>(<span class="ident">BatchDigest</span>, <span class="ident">WorkerId</span>), <span class="ident">PayloadToken</span><span class="op">&gt;</span>,
-        <span class="ident">tx_consensus</span>: <span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">Certificate</span><span class="op">&lt;</span><span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-        <span class="ident">rx_consensus</span>: <span class="ident">Receiver</span><span class="op">&lt;</span><span class="ident">Certificate</span><span class="op">&lt;</span><span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-        <span class="ident">external_consensus</span>: <span class="ident">bool</span>,
-    ) {
-        <span class="kw">let</span> (<span class="ident">tx_others_digests</span>, <span class="ident">rx_others_digests</span>) <span class="op">=</span> <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
-        <span class="kw">let</span> (<span class="ident">tx_our_digests</span>, <span class="ident">rx_our_digests</span>) <span class="op">=</span> <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
-        <span class="kw">let</span> (<span class="ident">tx_parents</span>, <span class="ident">rx_parents</span>) <span class="op">=</span> <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
-        <span class="kw">let</span> (<span class="ident">tx_headers</span>, <span class="ident">rx_headers</span>) <span class="op">=</span> <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
-        <span class="kw">let</span> (<span class="ident">tx_sync_headers</span>, <span class="ident">rx_sync_headers</span>) <span class="op">=</span> <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
-        <span class="kw">let</span> (<span class="ident">tx_sync_certificates</span>, <span class="ident">rx_sync_certificates</span>) <span class="op">=</span> <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
-        <span class="kw">let</span> (<span class="ident">tx_headers_loopback</span>, <span class="ident">rx_headers_loopback</span>) <span class="op">=</span> <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
-        <span class="kw">let</span> (<span class="ident">tx_certificates_loopback</span>, <span class="ident">rx_certificates_loopback</span>) <span class="op">=</span> <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
-        <span class="kw">let</span> (<span class="ident">tx_primary_messages</span>, <span class="ident">rx_primary_messages</span>) <span class="op">=</span> <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
-        <span class="kw">let</span> (<span class="ident">tx_helper_requests</span>, <span class="ident">rx_helper_requests</span>) <span class="op">=</span> <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
-        <span class="comment">// _tx_get_block_commands should be used by the handler that will issue the requests</span>
-        <span class="comment">// to fetch the collections from Narwhal (e.x the get_collections endpoint).</span>
-        <span class="kw">let</span> (<span class="ident">tx_get_block_commands</span>, <span class="ident">rx_get_block_commands</span>) <span class="op">=</span> <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
-        <span class="kw">let</span> (<span class="ident">tx_batches</span>, <span class="ident">rx_batches</span>) <span class="op">=</span> <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
-        <span class="comment">// _tx_block_removal_commands should be used by the handler that will issue the requests</span>
-        <span class="comment">// to remove collections from Narwhal (e.x the remove_collections endpoint).</span>
-        <span class="kw">let</span> (<span class="ident">_tx_block_removal_commands</span>, <span class="ident">rx_block_removal_commands</span>) <span class="op">=</span> <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
-        <span class="kw">let</span> (<span class="ident">tx_batch_removal</span>, <span class="ident">rx_batch_removal</span>) <span class="op">=</span> <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
-        <span class="kw">let</span> (<span class="ident">_tx_block_synchronizer_commands</span>, <span class="ident">rx_block_synchronizer_commands</span>) <span class="op">=</span>
-            <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
-        <span class="kw">let</span> (<span class="ident">tx_certificate_responses</span>, <span class="ident">rx_certificate_responses</span>) <span class="op">=</span> <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
-        <span class="kw">let</span> (<span class="ident">tx_payload_availability_responses</span>, <span class="ident">rx_payload_availability_responses</span>) <span class="op">=</span>
-            <span class="ident">channel</span>(<span class="ident">CHANNEL_CAPACITY</span>);
+        <span class="comment">// we need to hack the gauge from this consensus channel into the primary registry
+        // This avoids a cyclic dependency in the initialization of consensus and primary
+        // TODO: this (tx_committed_certificates, rx_consensus) channel pair name is highly counterintuitive: see initialization in node and rename(?)
+        </span><span class="kw">let </span>committed_certificates_gauge = tx_committed_certificates.gauge().clone();
+        primary_channel_metrics.replace_registered_committed_certificates_metric(
+            registry,
+            Box::new(committed_certificates_gauge),
+        );
 
-        <span class="comment">// Write the parameters to the logs.</span>
-        <span class="ident">parameters</span>.<span class="ident">tracing</span>();
+        <span class="kw">let </span>new_certificates_gauge = tx_consensus.gauge().clone();
+        primary_channel_metrics
+            .replace_registered_new_certificates_metric(registry, Box::new(new_certificates_gauge));
 
-        <span class="comment">// Atomic variable use to synchronize all tasks with the latest consensus round. This is only</span>
-        <span class="comment">// used for cleanup. The only task that write into this variable is `GarbageCollector`.</span>
-        <span class="kw">let</span> <span class="ident">consensus_round</span> <span class="op">=</span> <span class="ident">Arc::new</span>(<span class="ident">AtomicU64::new</span>(<span class="number">0</span>));
+        <span class="kw">let </span>tx_get_block_commands_gauge = tx_get_block_commands.gauge().clone();
+        primary_channel_metrics.replace_registered_get_block_commands_metric(
+            registry,
+            Box::new(tx_get_block_commands_gauge),
+        );
 
-        <span class="comment">// Spawn the network receiver listening to messages from the other primaries.</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">address</span> <span class="op">=</span> <span class="ident">committee</span>
-            .<span class="ident">primary</span>(<span class="kw-2">&amp;</span><span class="ident">name</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;Our public key or worker id is not in the committee&quot;</span>)
-            .<span class="ident">primary_to_primary</span>;
-        <span class="ident">address</span>.<span class="ident">set_ip</span>(<span class="ident">Primary::INADDR_ANY</span>);
-        <span class="ident">PrimaryReceiverHandler</span> {
-            <span class="ident">tx_primary_messages</span>,
-            <span class="ident">tx_helper_requests</span>,
-            <span class="ident">tx_payload_availability_responses</span>,
-            <span class="ident">tx_certificate_responses</span>,
+        <span class="kw">let </span>(tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(<span class="number">0u64</span>);
+
+        <span class="kw">let </span>our_workers = worker_cache
+            .load()
+            .workers
+            .get(<span class="kw-2">&amp;</span>name)
+            .expect(<span class="string">&quot;Our public key is not in the worker cache&quot;</span>)
+            .<span class="number">0
+            </span>.clone();
+
+        <span class="comment">// Spawn the network receiver listening to messages from the other primaries.
+        </span><span class="kw">let </span>address = committee
+            .load()
+            .primary(<span class="kw-2">&amp;</span>name)
+            .expect(<span class="string">&quot;Our public key or worker id is not in the committee&quot;</span>)
+            .primary_to_primary;
+        <span class="kw">let </span>address = address
+            .replace(<span class="number">0</span>, |_protocol| <span class="prelude-val">Some</span>(Protocol::Ip4(Primary::INADDR_ANY)))
+            .unwrap();
+        <span class="kw">let </span>primary_receiver_handle = PrimaryReceiverHandler {
+            tx_primary_messages: tx_primary_messages.clone(),
+            tx_helper_requests,
+            tx_payload_availability_responses,
+            tx_certificate_responses,
         }
-        .<span class="ident">spawn</span>(<span class="ident">address</span>, <span class="ident">parameters</span>.<span class="ident">max_concurrent_requests</span>);
+        .spawn(
+            address.clone(),
+            parameters.max_concurrent_requests,
+            tx_reconfigure.subscribe(),
+            primary_endpoint_metrics,
+        );
         <span class="macro">info!</span>(
             <span class="string">&quot;Primary {} listening to primary messages on {}&quot;</span>,
-            <span class="ident">name</span>.<span class="ident">encode_base64</span>(),
-            <span class="ident">address</span>
+            name.encode_base64(),
+            address
         );
 
-        <span class="comment">// Spawn the network receiver listening to messages from our workers.</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">address</span> <span class="op">=</span> <span class="ident">committee</span>
-            .<span class="ident">primary</span>(<span class="kw-2">&amp;</span><span class="ident">name</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;Our public key or worker id is not in the committee&quot;</span>)
-            .<span class="ident">worker_to_primary</span>;
-        <span class="ident">address</span>.<span class="ident">set_ip</span>(<span class="ident">Primary::INADDR_ANY</span>);
-        <span class="ident">WorkerReceiverHandler</span> {
-            <span class="ident">tx_our_digests</span>,
-            <span class="ident">tx_others_digests</span>,
-            <span class="ident">tx_batches</span>,
-            <span class="ident">tx_batch_removal</span>,
+        <span class="comment">// Spawn the network receiver listening to messages from our workers.
+        </span><span class="kw">let </span>address = committee
+            .load()
+            .primary(<span class="kw-2">&amp;</span>name)
+            .expect(<span class="string">&quot;Our public key or worker id is not in the committee&quot;</span>)
+            .worker_to_primary;
+        <span class="kw">let </span>address = address
+            .replace(<span class="number">0</span>, |_protocol| <span class="prelude-val">Some</span>(Protocol::Ip4(Primary::INADDR_ANY)))
+            .unwrap();
+        <span class="kw">let </span>worker_receiver_handle = WorkerReceiverHandler {
+            tx_our_digests,
+            tx_others_digests,
+            tx_batches,
+            tx_batch_removal,
+            tx_state_handler,
+            our_workers,
+            metrics: node_metrics.clone(),
         }
-        .<span class="ident">spawn</span>(<span class="ident">address</span>);
+        .spawn(address.clone(), tx_reconfigure.subscribe());
         <span class="macro">info!</span>(
             <span class="string">&quot;Primary {} listening to workers messages on {}&quot;</span>,
-            <span class="ident">name</span>.<span class="ident">encode_base64</span>(),
-            <span class="ident">address</span>
+            name.encode_base64(),
+            address
         );
 
-        <span class="comment">// The `Synchronizer` provides auxiliary methods helping the `Core` to sync.</span>
-        <span class="kw">let</span> <span class="ident">synchronizer</span> <span class="op">=</span> <span class="ident">Synchronizer::new</span>(
-            <span class="ident">name</span>.<span class="ident">clone</span>(),
-            <span class="kw-2">&amp;</span><span class="ident">committee</span>,
-            <span class="ident">certificate_store</span>.<span class="ident">clone</span>(),
-            <span class="ident">payload_store</span>.<span class="ident">clone</span>(),
-            <span class="comment">/* tx_header_waiter */</span> <span class="ident">tx_sync_headers</span>,
-            <span class="comment">/* tx_certificate_waiter */</span> <span class="ident">tx_sync_certificates</span>,
+        <span class="comment">// The `Synchronizer` provides auxiliary methods helping the `Core` to sync.
+        </span><span class="kw">let </span>synchronizer = Synchronizer::new(
+            name.clone(),
+            <span class="kw-2">&amp;</span>committee.load(),
+            certificate_store.clone(),
+            payload_store.clone(),
+            <span class="comment">/* tx_header_waiter */ </span>tx_sync_headers,
+            <span class="comment">/* tx_certificate_waiter */ </span>tx_sync_certificates,
+            dag.clone(),
         );
 
-        <span class="comment">// The `SignatureService` is used to require signatures on specific digests.</span>
-        <span class="kw">let</span> <span class="ident">signature_service</span> <span class="op">=</span> <span class="ident">SignatureService::new</span>(<span class="ident">signer</span>);
+        <span class="comment">// The `SignatureService` is used to require signatures on specific digests.
+        </span><span class="kw">let </span>signature_service = SignatureService::new(signer);
 
-        <span class="comment">// The `Core` receives and handles headers, votes, and certificates from the other primaries.</span>
-        <span class="ident">Core::spawn</span>(
-            <span class="ident">name</span>.<span class="ident">clone</span>(),
-            <span class="ident">committee</span>.<span class="ident">clone</span>(),
-            <span class="ident">header_store</span>.<span class="ident">clone</span>(),
-            <span class="ident">certificate_store</span>.<span class="ident">clone</span>(),
-            <span class="ident">synchronizer</span>,
-            <span class="ident">signature_service</span>.<span class="ident">clone</span>(),
-            <span class="ident">consensus_round</span>.<span class="ident">clone</span>(),
-            <span class="ident">parameters</span>.<span class="ident">gc_depth</span>,
-            <span class="comment">/* rx_primaries */</span> <span class="ident">rx_primary_messages</span>,
-            <span class="comment">/* rx_header_waiter */</span> <span class="ident">rx_headers_loopback</span>,
-            <span class="comment">/* rx_certificate_waiter */</span> <span class="ident">rx_certificates_loopback</span>,
-            <span class="comment">/* rx_proposer */</span> <span class="ident">rx_headers</span>,
-            <span class="ident">tx_consensus</span>,
-            <span class="comment">/* tx_proposer */</span> <span class="ident">tx_parents</span>,
+        <span class="comment">// The `Core` receives and handles headers, votes, and certificates from the other primaries.
+        </span><span class="kw">let </span>core_primary_network = PrimaryNetwork::new(Metrics::new(
+            network_metrics.clone(),
+            <span class="string">&quot;primary_core&quot;</span>.to_string(),
+        ));
+        <span class="kw">let </span>core_handle = Core::spawn(
+            name.clone(),
+            (<span class="kw-2">**</span>committee.load()).clone(),
+            worker_cache.clone(),
+            header_store.clone(),
+            certificate_store.clone(),
+            synchronizer,
+            signature_service.clone(),
+            tx_consensus_round_updates.subscribe(),
+            parameters.gc_depth,
+            tx_reconfigure.subscribe(),
+            <span class="comment">/* rx_primaries */ </span>rx_primary_messages,
+            <span class="comment">/* rx_header_waiter */ </span>rx_headers_loopback,
+            <span class="comment">/* rx_certificate_waiter */ </span>rx_certificates_loopback,
+            <span class="comment">/* rx_proposer */ </span>rx_headers,
+            tx_consensus,
+            <span class="comment">/* tx_proposer */ </span>tx_parents,
+            node_metrics.clone(),
+            core_primary_network,
         );
 
-        <span class="comment">// Keeps track of the latest consensus round and allows other tasks to clean up their their internal state</span>
-        <span class="ident">GarbageCollector::spawn</span>(<span class="kw-2">&amp;</span><span class="ident">name</span>, <span class="kw-2">&amp;</span><span class="ident">committee</span>, <span class="ident">consensus_round</span>.<span class="ident">clone</span>(), <span class="ident">rx_consensus</span>);
-
-        <span class="comment">// Receives batch digests from other workers. They are only used to validate headers.</span>
-        <span class="ident">PayloadReceiver::spawn</span>(
-            <span class="ident">payload_store</span>.<span class="ident">clone</span>(),
-            <span class="comment">/* rx_workers */</span> <span class="ident">rx_others_digests</span>,
+        <span class="comment">// Receives batch digests from other workers. They are only used to validate headers.
+        </span><span class="kw">let </span>payload_receiver_handle = PayloadReceiver::spawn(
+            payload_store.clone(),
+            <span class="comment">/* rx_workers */ </span>rx_others_digests,
         );
 
-        <span class="comment">// Retrieves a block&#39;s data by contacting the worker nodes that contain the</span>
-        <span class="comment">// underlying batches and their transactions.</span>
-        <span class="ident">BlockWaiter::spawn</span>(
-            <span class="ident">name</span>.<span class="ident">clone</span>(),
-            <span class="ident">committee</span>.<span class="ident">clone</span>(),
-            <span class="ident">certificate_store</span>.<span class="ident">clone</span>(),
-            <span class="ident">rx_get_block_commands</span>,
-            <span class="ident">rx_batches</span>,
+        <span class="kw">let </span>block_synchronizer_handler = Arc::new(BlockSynchronizerHandler::new(
+            tx_block_synchronizer_commands,
+            tx_primary_messages,
+            certificate_store.clone(),
+            parameters
+                .block_synchronizer
+                .handler_certificate_deliver_timeout,
+        ));
+
+        <span class="comment">// Retrieves a block&#39;s data by contacting the worker nodes that contain the
+        // underlying batches and their transactions.
+        </span><span class="kw">let </span>block_waiter_primary_network = PrimaryToWorkerNetwork::new(Metrics::new(
+            network_metrics.clone(),
+            <span class="string">&quot;block_waiter&quot;</span>.to_string(),
+        ));
+        <span class="kw">let </span>block_waiter_handle = BlockWaiter::spawn(
+            name.clone(),
+            (<span class="kw-2">**</span>committee.load()).clone(),
+            worker_cache.clone(),
+            tx_reconfigure.subscribe(),
+            rx_get_block_commands,
+            rx_batches,
+            block_synchronizer_handler.clone(),
+            block_waiter_primary_network,
         );
 
-        <span class="comment">// Orchestrates the removal of blocks across the primary and worker nodes.</span>
-        <span class="ident">BlockRemover::spawn</span>(
-            <span class="ident">name</span>.<span class="ident">clone</span>(),
-            <span class="ident">committee</span>.<span class="ident">clone</span>(),
-            <span class="ident">certificate_store</span>.<span class="ident">clone</span>(),
-            <span class="ident">header_store</span>,
-            <span class="ident">payload_store</span>.<span class="ident">clone</span>(),
-            <span class="ident">PrimaryToWorkerNetwork::default</span>(),
-            <span class="ident">rx_block_removal_commands</span>,
-            <span class="ident">rx_batch_removal</span>,
+        <span class="comment">// Indicator variable for the gRPC server
+        </span><span class="kw">let </span>internal_consensus = dag.is_none();
+
+        <span class="comment">// Orchestrates the removal of blocks across the primary and worker nodes.
+        </span><span class="kw">let </span>block_remover_primary_network = PrimaryToWorkerNetwork::new(Metrics::new(
+            network_metrics.clone(),
+            <span class="string">&quot;block_remover&quot;</span>.to_string(),
+        ));
+        <span class="kw">let </span>block_remover_handle = BlockRemover::spawn(
+            name.clone(),
+            (<span class="kw-2">**</span>committee.load()).clone(),
+            worker_cache.clone(),
+            certificate_store.clone(),
+            header_store,
+            payload_store.clone(),
+            dag.clone(),
+            block_remover_primary_network,
+            tx_reconfigure.subscribe(),
+            rx_block_removal_commands,
+            rx_batch_removal,
+            tx_committed_certificates,
         );
 
-        <span class="comment">// Responsible for finding missing blocks (certificates) and fetching</span>
-        <span class="comment">// them from the primary peers by synchronizing also their batches.</span>
-        <span class="ident">BlockSynchronizer::spawn</span>(
-            <span class="ident">name</span>.<span class="ident">clone</span>(),
-            <span class="ident">committee</span>.<span class="ident">clone</span>(),
-            <span class="ident">rx_block_synchronizer_commands</span>,
-            <span class="ident">rx_certificate_responses</span>,
-            <span class="ident">rx_payload_availability_responses</span>,
-            <span class="ident">PrimaryNetwork::default</span>(),
-            <span class="ident">payload_store</span>.<span class="ident">clone</span>(),
-            <span class="ident">parameters</span>.<span class="ident">block_synchronizer</span>,
+        <span class="comment">// Responsible for finding missing blocks (certificates) and fetching
+        // them from the primary peers by synchronizing also their batches.
+        </span><span class="kw">let </span>block_synchronizer_network = PrimaryNetwork::new(Metrics::new(
+            network_metrics.clone(),
+            <span class="string">&quot;block_synchronizer_handler&quot;</span>.to_string(),
+        ));
+        <span class="kw">let </span>block_synchronizer_handle = BlockSynchronizer::spawn(
+            name.clone(),
+            (<span class="kw-2">**</span>committee.load()).clone(),
+            worker_cache.clone(),
+            tx_reconfigure.subscribe(),
+            rx_block_synchronizer_commands,
+            rx_certificate_responses,
+            rx_payload_availability_responses,
+            block_synchronizer_network,
+            payload_store.clone(),
+            certificate_store.clone(),
+            parameters.block_synchronizer,
         );
 
-        <span class="comment">// Whenever the `Synchronizer` does not manage to validate a header due to missing parent certificates of</span>
-        <span class="comment">// batch digests, it commands the `HeaderWaiter` to synchronize with other nodes, wait for their reply, and</span>
-        <span class="comment">// re-schedule execution of the header once we have all missing data.</span>
-        <span class="ident">HeaderWaiter::spawn</span>(
-            <span class="ident">name</span>.<span class="ident">clone</span>(),
-            <span class="ident">committee</span>.<span class="ident">clone</span>(),
-            <span class="ident">certificate_store</span>.<span class="ident">clone</span>(),
-            <span class="ident">payload_store</span>.<span class="ident">clone</span>(),
-            <span class="ident">consensus_round</span>.<span class="ident">clone</span>(),
-            <span class="ident">parameters</span>.<span class="ident">gc_depth</span>,
-            <span class="ident">parameters</span>.<span class="ident">sync_retry_delay</span>,
-            <span class="ident">parameters</span>.<span class="ident">sync_retry_nodes</span>,
-            <span class="comment">/* rx_synchronizer */</span> <span class="ident">rx_sync_headers</span>,
-            <span class="comment">/* tx_core */</span> <span class="ident">tx_headers_loopback</span>,
+        <span class="comment">// Whenever the `Synchronizer` does not manage to validate a header due to missing parent certificates of
+        // batch digests, it commands the `HeaderWaiter` to synchronize with other nodes, wait for their reply, and
+        // re-schedule execution of the header once we have all missing data.
+        </span><span class="kw">let </span>header_waiter_primary_network = PrimaryNetwork::new(Metrics::new(
+            network_metrics.clone(),
+            <span class="string">&quot;header_waiter&quot;</span>.to_string(),
+        ));
+        <span class="kw">let </span>header_waiter_worker_network = PrimaryToWorkerNetwork::new(Metrics::new(
+            network_metrics.clone(),
+            <span class="string">&quot;header_waiter&quot;</span>.to_string(),
+        ));
+        <span class="kw">let </span>header_waiter_handle = HeaderWaiter::spawn(
+            name.clone(),
+            (<span class="kw-2">**</span>committee.load()).clone(),
+            worker_cache.clone(),
+            certificate_store.clone(),
+            payload_store.clone(),
+            tx_consensus_round_updates.subscribe(),
+            parameters.gc_depth,
+            parameters.sync_retry_delay,
+            parameters.sync_retry_nodes,
+            tx_reconfigure.subscribe(),
+            <span class="comment">/* rx_synchronizer */ </span>rx_sync_headers,
+            <span class="comment">/* tx_core */ </span>tx_headers_loopback,
+            node_metrics.clone(),
+            header_waiter_primary_network,
+            header_waiter_worker_network,
         );
 
-        <span class="comment">// The `CertificateWaiter` waits to receive all the ancestors of a certificate before looping it back to the</span>
-        <span class="comment">// `Core` for further processing.</span>
-        <span class="ident">CertificateWaiter::spawn</span>(
-            <span class="ident">certificate_store</span>.<span class="ident">clone</span>(),
-            <span class="ident">consensus_round</span>,
-            <span class="ident">parameters</span>.<span class="ident">gc_depth</span>,
-            <span class="comment">/* rx_synchronizer */</span> <span class="ident">rx_sync_certificates</span>,
-            <span class="comment">/* tx_core */</span> <span class="ident">tx_certificates_loopback</span>,
+        <span class="comment">// The `CertificateWaiter` waits to receive all the ancestors of a certificate before looping it back to the
+        // `Core` for further processing.
+        </span><span class="kw">let </span>certificate_waiter_handle = CertificateWaiter::spawn(
+            (<span class="kw-2">**</span>committee.load()).clone(),
+            certificate_store.clone(),
+            rx_consensus_round_updates,
+            parameters.gc_depth,
+            tx_reconfigure.subscribe(),
+            <span class="comment">/* rx_synchronizer */ </span>rx_sync_certificates,
+            <span class="comment">/* tx_core */ </span>tx_certificates_loopback,
+            node_metrics.clone(),
         );
 
-        <span class="comment">// When the `Core` collects enough parent certificates, the `Proposer` generates a new header with new batch</span>
-        <span class="comment">// digests from our workers and it back to the `Core`.</span>
-        <span class="ident">Proposer::spawn</span>(
-            <span class="ident">name</span>.<span class="ident">clone</span>(),
-            <span class="kw-2">&amp;</span><span class="ident">committee</span>,
-            <span class="ident">signature_service</span>,
-            <span class="ident">parameters</span>.<span class="ident">header_size</span>,
-            <span class="ident">parameters</span>.<span class="ident">max_header_delay</span>,
-            <span class="comment">/* rx_core */</span> <span class="ident">rx_parents</span>,
-            <span class="comment">/* rx_workers */</span> <span class="ident">rx_our_digests</span>,
-            <span class="comment">/* tx_core */</span> <span class="ident">tx_headers</span>,
+        <span class="comment">// When the `Core` collects enough parent certificates, the `Proposer` generates a new header with new batch
+        // digests from our workers and sends it back to the `Core`.
+        </span><span class="kw">let </span>proposer_handle = Proposer::spawn(
+            name.clone(),
+            (<span class="kw-2">**</span>committee.load()).clone(),
+            signature_service,
+            parameters.header_size,
+            parameters.max_header_delay,
+            network_model,
+            tx_reconfigure.subscribe(),
+            <span class="comment">/* rx_core */ </span>rx_parents,
+            <span class="comment">/* rx_workers */ </span>rx_our_digests,
+            <span class="comment">/* tx_core */ </span>tx_headers,
+            node_metrics,
         );
 
-        <span class="comment">// The `Helper` is dedicated to reply to certificates &amp; payload availability requests</span>
-        <span class="comment">// from other primaries.</span>
-        <span class="ident">Helper::spawn</span>(
-            <span class="ident">name</span>.<span class="ident">clone</span>(),
-            <span class="ident">committee</span>.<span class="ident">clone</span>(),
-            <span class="ident">certificate_store</span>,
-            <span class="ident">payload_store</span>,
-            <span class="ident">rx_helper_requests</span>,
+        <span class="comment">// The `Helper` is dedicated to reply to certificates &amp; payload availability requests
+        // from other primaries.
+        </span><span class="kw">let </span>helper_primary_network =
+            PrimaryNetwork::new(Metrics::new(network_metrics, <span class="string">&quot;primary_helper&quot;</span>.to_string()));
+        <span class="kw">let </span>helper_handle = Helper::spawn(
+            name.clone(),
+            (<span class="kw-2">**</span>committee.load()).clone(),
+            certificate_store,
+            payload_store,
+            tx_reconfigure.subscribe(),
+            rx_helper_requests,
+            helper_primary_network,
         );
 
-        <span class="kw">if</span> <span class="ident">external_consensus</span> {
-            <span class="comment">// Spawn a grpc server to accept requests from external consensus layer.</span>
-            <span class="ident">ConsensusAPIGrpc::spawn</span>(
-                <span class="ident">parameters</span>.<span class="ident">consensus_api_grpc</span>.<span class="ident">socket_addr</span>,
-                <span class="ident">tx_get_block_commands</span>,
-                <span class="ident">parameters</span>.<span class="ident">consensus_api_grpc</span>.<span class="ident">get_collections_timeout</span>,
-            );
-        }
+        <span class="comment">// Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
+        </span><span class="kw">let </span>state_handler_handle = StateHandler::spawn(
+            name.clone(),
+            committee.clone(),
+            worker_cache,
+            rx_consensus,
+            tx_consensus_round_updates,
+            rx_state_handler,
+            tx_reconfigure,
+        );
 
-        <span class="comment">// NOTE: This log entry is used to compute performance.</span>
-        <span class="macro">info!</span>(
+        <span class="kw">let </span>consensus_api_handle = <span class="kw">if </span>!internal_consensus {
+            <span class="comment">// Spawn a grpc server to accept requests from external consensus layer.
+            </span><span class="prelude-val">Some</span>(ConsensusAPIGrpc::spawn(
+                name.clone(),
+                parameters.consensus_api_grpc.socket_addr,
+                tx_get_block_commands,
+                tx_block_removal_commands,
+                parameters.consensus_api_grpc.get_collections_timeout,
+                parameters.consensus_api_grpc.remove_collections_timeout,
+                block_synchronizer_handler,
+                dag,
+                committee.clone(),
+                endpoint_metrics,
+            ))
+        } <span class="kw">else </span>{
+            <span class="prelude-val">None
+        </span>};
+
+        <span class="comment">// NOTE: This log entry is used to compute performance.
+        </span><span class="macro">info!</span>(
             <span class="string">&quot;Primary {} successfully booted on {}&quot;</span>,
-            <span class="ident">name</span>.<span class="ident">encode_base64</span>(),
-            <span class="ident">committee</span>
-                .<span class="ident">primary</span>(<span class="kw-2">&amp;</span><span class="ident">name</span>)
-                .<span class="ident">expect</span>(<span class="string">&quot;Our public key or worker id is not in the committee&quot;</span>)
-                .<span class="ident">primary_to_primary</span>
-                .<span class="ident">ip</span>()
+            name.encode_base64(),
+            committee
+                .load()
+                .primary(<span class="kw-2">&amp;</span>name)
+                .expect(<span class="string">&quot;Our public key or worker id is not in the committee&quot;</span>)
+                .primary_to_primary
         );
-    }
-}
 
-<span class="doccomment">/// Defines how the network receiver handles incoming primary messages.</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>)]</span>
-<span class="kw">struct</span> <span class="ident">PrimaryReceiverHandler</span><span class="op">&lt;</span><span class="ident">PublicKey</span>: <span class="ident">VerifyingKey</span><span class="op">&gt;</span> {
-    <span class="ident">tx_primary_messages</span>: <span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">PrimaryMessage</span><span class="op">&lt;</span><span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    <span class="ident">tx_helper_requests</span>: <span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">PrimaryMessage</span><span class="op">&lt;</span><span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    <span class="ident">tx_payload_availability_responses</span>: <span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">PayloadAvailabilityResponse</span><span class="op">&lt;</span><span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    <span class="ident">tx_certificate_responses</span>: <span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">CertificatesResponse</span><span class="op">&lt;</span><span class="ident">PublicKey</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-}
+        <span class="kw">let </span><span class="kw-2">mut </span>handles = <span class="macro">vec!</span>[
+            primary_receiver_handle,
+            worker_receiver_handle,
+            core_handle,
+            payload_receiver_handle,
+            block_synchronizer_handle,
+            block_waiter_handle,
+            block_remover_handle,
+            header_waiter_handle,
+            certificate_waiter_handle,
+            proposer_handle,
+            helper_handle,
+            state_handler_handle,
+        ];
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">PublicKey</span>: <span class="ident">VerifyingKey</span><span class="op">&gt;</span> <span class="ident">PrimaryReceiverHandler</span><span class="op">&lt;</span><span class="ident">PublicKey</span><span class="op">&gt;</span> {
-    <span class="kw">fn</span> <span class="ident">spawn</span>(<span class="self">self</span>, <span class="ident">address</span>: <span class="ident">SocketAddr</span>, <span class="ident">max_concurrent_requests</span>: <span class="ident">usize</span>) {
-        <span class="kw">let</span> <span class="ident">service</span> <span class="op">=</span> <span class="ident">tonic::transport::Server::builder</span>()
-            .<span class="ident">concurrency_limit_per_connection</span>(<span class="ident">max_concurrent_requests</span>)
-            .<span class="ident">add_service</span>(<span class="ident">PrimaryToPrimaryServer::new</span>(<span class="self">self</span>))
-            .<span class="ident">serve</span>(<span class="ident">address</span>);
-        <span class="ident">tokio::spawn</span>(<span class="ident">service</span>);
-    }
-}
-
-<span class="attribute">#[<span class="ident">async_trait</span>]</span>
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">PublicKey</span>: <span class="ident">VerifyingKey</span><span class="op">&gt;</span> <span class="ident">PrimaryToPrimary</span> <span class="kw">for</span> <span class="ident">PrimaryReceiverHandler</span><span class="op">&lt;</span><span class="ident">PublicKey</span><span class="op">&gt;</span> {
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">send_message</span>(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">request</span>: <span class="ident">Request</span><span class="op">&lt;</span><span class="ident">BincodeEncodedPayload</span><span class="op">&gt;</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Response</span><span class="op">&lt;</span><span class="ident">Empty</span><span class="op">&gt;</span>, <span class="ident">Status</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">message</span>: <span class="ident">PrimaryMessage</span><span class="op">&lt;</span><span class="ident">PublicKey</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">request</span>
-            .<span class="ident">into_inner</span>()
-            .<span class="ident">deserialize</span>()
-            .<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> <span class="ident">Status::invalid_argument</span>(<span class="ident">e</span>.<span class="ident">to_string</span>()))<span class="question-mark">?</span>;
-
-        <span class="kw">match</span> <span class="ident">message</span> {
-            <span class="ident">PrimaryMessage::CertificatesRequest</span>(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; <span class="self">self</span>
-                .<span class="ident">tx_helper_requests</span>
-                .<span class="ident">send</span>(<span class="ident">message</span>)
-                .<span class="kw">await</span>
-                .<span class="ident">expect</span>(<span class="string">&quot;Failed to send primary message&quot;</span>),
-            <span class="ident">PrimaryMessage::CertificatesBatchRequest</span> { .. } =&gt; <span class="self">self</span>
-                .<span class="ident">tx_helper_requests</span>
-                .<span class="ident">send</span>(<span class="ident">message</span>)
-                .<span class="kw">await</span>
-                .<span class="ident">expect</span>(<span class="string">&quot;Failed to send primary message&quot;</span>),
-            <span class="ident">PrimaryMessage::CertificatesBatchResponse</span> { <span class="ident">certificates</span>, <span class="ident">from</span> } =&gt; <span class="self">self</span>
-                .<span class="ident">tx_certificate_responses</span>
-                .<span class="ident">send</span>(<span class="ident">CertificatesResponse</span> {
-                    <span class="ident">certificates</span>: <span class="ident">certificates</span>.<span class="ident">to_vec</span>(),
-                    <span class="ident">from</span>: <span class="ident">from</span>.<span class="ident">clone</span>(),
-                })
-                .<span class="kw">await</span>
-                .<span class="ident">expect</span>(<span class="string">&quot;Failed to send primary message&quot;</span>),
-            <span class="ident">PrimaryMessage::PayloadAvailabilityRequest</span> { .. } =&gt; <span class="self">self</span>
-                .<span class="ident">tx_helper_requests</span>
-                .<span class="ident">send</span>(<span class="ident">message</span>)
-                .<span class="kw">await</span>
-                .<span class="ident">expect</span>(<span class="string">&quot;Failed to send primary message&quot;</span>),
-            <span class="ident">PrimaryMessage::PayloadAvailabilityResponse</span> {
-                <span class="ident">payload_availability</span>,
-                <span class="ident">from</span>,
-            } =&gt; <span class="self">self</span>
-                .<span class="ident">tx_payload_availability_responses</span>
-                .<span class="ident">send</span>(<span class="ident">PayloadAvailabilityResponse</span> {
-                    <span class="ident">block_ids</span>: <span class="ident">payload_availability</span>.<span class="ident">to_vec</span>(),
-                    <span class="ident">from</span>: <span class="ident">from</span>.<span class="ident">clone</span>(),
-                })
-                .<span class="kw">await</span>
-                .<span class="ident">expect</span>(<span class="string">&quot;Failed to send primary message&quot;</span>),
-            <span class="kw">_</span> =&gt; <span class="self">self</span>
-                .<span class="ident">tx_primary_messages</span>
-                .<span class="ident">send</span>(<span class="ident">message</span>)
-                .<span class="kw">await</span>
-                .<span class="ident">expect</span>(<span class="string">&quot;Failed to send certificate&quot;</span>),
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(h) = consensus_api_handle {
+            handles.push(h);
         }
 
-        <span class="prelude-val">Ok</span>(<span class="ident">Response::new</span>(<span class="ident">Empty</span> {}))
+        handles
     }
 }
 
-<span class="doccomment">/// Defines how the network receiver handles incoming workers messages.</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>)]</span>
-<span class="kw">struct</span> <span class="ident">WorkerReceiverHandler</span> {
-    <span class="ident">tx_our_digests</span>: <span class="ident">Sender</span><span class="op">&lt;</span>(<span class="ident">BatchDigest</span>, <span class="ident">WorkerId</span>)<span class="op">&gt;</span>,
-    <span class="ident">tx_others_digests</span>: <span class="ident">Sender</span><span class="op">&lt;</span>(<span class="ident">BatchDigest</span>, <span class="ident">WorkerId</span>)<span class="op">&gt;</span>,
-    <span class="ident">tx_batches</span>: <span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">BatchResult</span><span class="op">&gt;</span>,
-    <span class="ident">tx_batch_removal</span>: <span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">DeleteBatchResult</span><span class="op">&gt;</span>,
+<span class="doccomment">/// Defines how the network receiver handles incoming primary messages.
+</span><span class="attribute">#[derive(Clone)]
+</span><span class="kw">struct </span>PrimaryReceiverHandler {
+    tx_primary_messages: Sender&lt;PrimaryMessage&gt;,
+    tx_helper_requests: Sender&lt;PrimaryMessage&gt;,
+    tx_payload_availability_responses: Sender&lt;PayloadAvailabilityResponse&gt;,
+    tx_certificate_responses: Sender&lt;CertificatesResponse&gt;,
 }
 
-<span class="kw">impl</span> <span class="ident">WorkerReceiverHandler</span> {
-    <span class="kw">fn</span> <span class="ident">spawn</span>(<span class="self">self</span>, <span class="ident">address</span>: <span class="ident">SocketAddr</span>) {
-        <span class="kw">let</span> <span class="ident">service</span> <span class="op">=</span> <span class="ident">tonic::transport::Server::builder</span>()
-            .<span class="ident">add_service</span>(<span class="ident">WorkerToPrimaryServer::new</span>(<span class="self">self</span>))
-            .<span class="ident">serve</span>(<span class="ident">address</span>);
-        <span class="ident">tokio::spawn</span>(<span class="ident">service</span>);
+<span class="kw">impl </span>PrimaryReceiverHandler {
+    <span class="kw">async fn </span>wait_for_shutdown(<span class="kw-2">mut </span>rx_reconfigure: watch::Receiver&lt;ReconfigureNotification&gt;) {
+        <span class="kw">loop </span>{
+            <span class="kw">let </span>result = rx_reconfigure.changed().<span class="kw">await</span>;
+            result.expect(<span class="string">&quot;Committee channel dropped&quot;</span>);
+            <span class="kw">let </span>message = rx_reconfigure.borrow().clone();
+            <span class="kw">if let </span>ReconfigureNotification::Shutdown = message {
+                <span class="kw">break</span>;
+            }
+        }
+    }
+
+    <span class="attribute">#[must_use]
+    </span><span class="kw">fn </span>spawn(
+        <span class="self">self</span>,
+        address: Multiaddr,
+        max_concurrent_requests: usize,
+        rx_reconfigure: watch::Receiver&lt;ReconfigureNotification&gt;,
+        primary_endpoint_metrics: PrimaryEndpointMetrics,
+    ) -&gt; JoinHandle&lt;()&gt; {
+        tokio::spawn(<span class="kw">async move </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>config = mysten_network::config::Config::new();
+            config.concurrency_limit_per_connection = <span class="prelude-val">Some</span>(max_concurrent_requests);
+            <span class="macro">info!</span>(<span class="string">&quot;PrimaryReceiverHandler has started successfully.&quot;</span>);
+            <span class="macro">tokio::select! </span>{
+                _result = config
+                    .server_builder_with_metrics(primary_endpoint_metrics)
+                    .add_service(PrimaryToPrimaryServer::new(<span class="self">self</span>))
+                    .bind(<span class="kw-2">&amp;</span>address)
+                    .<span class="kw">await
+                    </span>.unwrap()
+                    .serve() =&gt; (),
+
+                () = <span class="self">Self</span>::wait_for_shutdown(rx_reconfigure) =&gt; ()
+            }
+        })
     }
 }
 
-<span class="attribute">#[<span class="ident">async_trait</span>]</span>
-<span class="kw">impl</span> <span class="ident">WorkerToPrimary</span> <span class="kw">for</span> <span class="ident">WorkerReceiverHandler</span> {
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">send_message</span>(
+<span class="attribute">#[async_trait]
+</span><span class="kw">impl </span>PrimaryToPrimary <span class="kw">for </span>PrimaryReceiverHandler {
+    <span class="kw">async fn </span>send_message(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">request</span>: <span class="ident">Request</span><span class="op">&lt;</span><span class="ident">BincodeEncodedPayload</span><span class="op">&gt;</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Response</span><span class="op">&lt;</span><span class="ident">Empty</span><span class="op">&gt;</span>, <span class="ident">Status</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">message</span>: <span class="ident">WorkerPrimaryMessage</span> <span class="op">=</span> <span class="ident">request</span>
-            .<span class="ident">into_inner</span>()
-            .<span class="ident">deserialize</span>()
-            .<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> <span class="ident">Status::invalid_argument</span>(<span class="ident">e</span>.<span class="ident">to_string</span>()))<span class="question-mark">?</span>;
+        request: Request&lt;BincodeEncodedPayload&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Response&lt;Empty&gt;, Status&gt; {
+        <span class="kw">let </span>message: PrimaryMessage = request
+            .into_inner()
+            .deserialize()
+            .map_err(|e| Status::invalid_argument(e.to_string()))<span class="question-mark">?</span>;
 
-        <span class="kw">match</span> <span class="ident">message</span> {
-            <span class="ident">WorkerPrimaryMessage::OurBatch</span>(<span class="ident">digest</span>, <span class="ident">worker_id</span>) =&gt; <span class="self">self</span>
-                .<span class="ident">tx_our_digests</span>
-                .<span class="ident">send</span>((<span class="ident">digest</span>, <span class="ident">worker_id</span>))
-                .<span class="kw">await</span>
-                .<span class="ident">expect</span>(<span class="string">&quot;Failed to send workers&#39; digests&quot;</span>),
-            <span class="ident">WorkerPrimaryMessage::OthersBatch</span>(<span class="ident">digest</span>, <span class="ident">worker_id</span>) =&gt; <span class="self">self</span>
-                .<span class="ident">tx_others_digests</span>
-                .<span class="ident">send</span>((<span class="ident">digest</span>, <span class="ident">worker_id</span>))
-                .<span class="kw">await</span>
-                .<span class="ident">expect</span>(<span class="string">&quot;Failed to send workers&#39; digests&quot;</span>),
-            <span class="ident">WorkerPrimaryMessage::RequestedBatch</span>(<span class="ident">digest</span>, <span class="ident">transactions</span>) =&gt; <span class="self">self</span>
-                .<span class="ident">tx_batches</span>
-                .<span class="ident">send</span>(<span class="prelude-val">Ok</span>(<span class="ident">BatchMessage</span> {
-                    <span class="ident">id</span>: <span class="ident">digest</span>,
-                    <span class="ident">transactions</span>,
+        <span class="kw">match </span>message {
+            PrimaryMessage::CertificatesRequest(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; <span class="self">self
+                </span>.tx_helper_requests
+                .send(message)
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| DagError::ShuttingDown),
+            PrimaryMessage::CertificatesBatchRequest { .. } =&gt; <span class="self">self
+                </span>.tx_helper_requests
+                .send(message)
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| DagError::ShuttingDown),
+            PrimaryMessage::CertificatesBatchResponse { certificates, from } =&gt; <span class="self">self
+                </span>.tx_certificate_responses
+                .send(CertificatesResponse {
+                    certificates: certificates.to_vec(),
+                    from: from.clone(),
+                })
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| DagError::ShuttingDown),
+            PrimaryMessage::PayloadAvailabilityRequest { .. } =&gt; <span class="self">self
+                </span>.tx_helper_requests
+                .send(message)
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| DagError::ShuttingDown),
+            PrimaryMessage::PayloadAvailabilityResponse {
+                payload_availability,
+                from,
+            } =&gt; <span class="self">self
+                </span>.tx_payload_availability_responses
+                .send(PayloadAvailabilityResponse {
+                    block_ids: payload_availability.to_vec(),
+                    from: from.clone(),
+                })
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| DagError::ShuttingDown),
+            <span class="kw">_ </span>=&gt; <span class="self">self
+                </span>.tx_primary_messages
+                .send(message)
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| DagError::ShuttingDown),
+        }
+        .map_err(|e| Status::not_found(e.to_string()))<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(Response::new(Empty {}))
+    }
+}
+
+<span class="doccomment">/// Defines how the network receiver handles incoming workers messages.
+</span><span class="attribute">#[derive(Clone)]
+</span><span class="kw">struct </span>WorkerReceiverHandler {
+    tx_our_digests: Sender&lt;(BatchDigest, WorkerId)&gt;,
+    tx_others_digests: Sender&lt;(BatchDigest, WorkerId)&gt;,
+    tx_batches: Sender&lt;BatchResult&gt;,
+    tx_batch_removal: Sender&lt;DeleteBatchResult&gt;,
+    tx_state_handler: Sender&lt;ReconfigureNotification&gt;,
+    our_workers: BTreeMap&lt;WorkerId, WorkerInfo&gt;,
+    metrics: Arc&lt;PrimaryMetrics&gt;,
+}
+
+<span class="kw">impl </span>WorkerReceiverHandler {
+    <span class="kw">async fn </span>wait_for_shutdown(<span class="kw-2">mut </span>rx_reconfigure: watch::Receiver&lt;ReconfigureNotification&gt;) {
+        <span class="kw">loop </span>{
+            <span class="kw">let </span>result = rx_reconfigure.changed().<span class="kw">await</span>;
+            result.expect(<span class="string">&quot;Committee channel dropped&quot;</span>);
+            <span class="kw">let </span>message = rx_reconfigure.borrow().clone();
+            <span class="kw">if let </span>ReconfigureNotification::Shutdown = message {
+                <span class="kw">break</span>;
+            }
+        }
+    }
+
+    <span class="attribute">#[must_use]
+    </span><span class="kw">fn </span>spawn(
+        <span class="self">self</span>,
+        address: Multiaddr,
+        rx_reconfigure: watch::Receiver&lt;ReconfigureNotification&gt;,
+    ) -&gt; JoinHandle&lt;()&gt; {
+        tokio::spawn(<span class="kw">async move </span>{
+            <span class="macro">info!</span>(<span class="string">&quot;WorkerReceiverHandler has started successfully.&quot;</span>);
+            <span class="macro">tokio::select! </span>{
+                _result = mysten_network::config::Config::default()
+                    .server_builder()
+                    .add_service(WorkerToPrimaryServer::new(<span class="self">self</span>))
+                    .bind(<span class="kw-2">&amp;</span>address)
+                    .<span class="kw">await
+                    </span>.unwrap()
+                    .serve() =&gt; (),
+
+                () = <span class="self">Self</span>::wait_for_shutdown(rx_reconfigure) =&gt; ()
+            }
+        })
+    }
+}
+
+<span class="attribute">#[async_trait]
+</span><span class="kw">impl </span>WorkerToPrimary <span class="kw">for </span>WorkerReceiverHandler {
+    <span class="kw">async fn </span>send_message(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        request: Request&lt;BincodeEncodedPayload&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Response&lt;Empty&gt;, Status&gt; {
+        <span class="kw">let </span>message: WorkerPrimaryMessage = request
+            .into_inner()
+            .deserialize()
+            .map_err(|e| Status::invalid_argument(e.to_string()))<span class="question-mark">?</span>;
+
+        <span class="kw">match </span>message {
+            WorkerPrimaryMessage::OurBatch(digest, worker_id) =&gt; {
+                <span class="self">self</span>.metrics
+                    .batches_received
+                    .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>worker_id.to_string(), <span class="string">&quot;our_batch&quot;</span>])
+                    .inc();
+                <span class="self">self</span>.tx_our_digests
+                    .send((digest, worker_id))
+                    .<span class="kw">await
+                    </span>.map_err(|<span class="kw">_</span>| DagError::ShuttingDown)
+            }
+            WorkerPrimaryMessage::OthersBatch(digest, worker_id) =&gt; {
+                <span class="self">self</span>.metrics
+                    .batches_received
+                    .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>worker_id.to_string(), <span class="string">&quot;others_batch&quot;</span>])
+                    .inc();
+                <span class="self">self</span>.tx_others_digests
+                    .send((digest, worker_id))
+                    .<span class="kw">await
+                    </span>.map_err(|<span class="kw">_</span>| DagError::ShuttingDown)
+            }
+            WorkerPrimaryMessage::RequestedBatch(digest, transactions) =&gt; <span class="self">self
+                </span>.tx_batches
+                .send(<span class="prelude-val">Ok</span>(BatchMessage {
+                    id: digest,
+                    transactions,
                 }))
-                .<span class="kw">await</span>
-                .<span class="ident">expect</span>(<span class="string">&quot;Failed to send batch result&quot;</span>),
-            <span class="ident">WorkerPrimaryMessage::DeletedBatches</span>(<span class="ident">batch_ids</span>) =&gt; <span class="self">self</span>
-                .<span class="ident">tx_batch_removal</span>
-                .<span class="ident">send</span>(<span class="prelude-val">Ok</span>(<span class="ident">DeleteBatchMessage</span> { <span class="ident">ids</span>: <span class="ident">batch_ids</span> }))
-                .<span class="kw">await</span>
-                .<span class="ident">expect</span>(<span class="string">&quot;Failed to send batch delete result&quot;</span>),
-            <span class="ident">WorkerPrimaryMessage::Error</span>(<span class="ident">error</span>) =&gt; <span class="kw">match</span> <span class="ident">error</span>.<span class="ident">clone</span>() {
-                <span class="ident">WorkerPrimaryError::RequestedBatchNotFound</span>(<span class="ident">digest</span>) =&gt; <span class="self">self</span>
-                    .<span class="ident">tx_batches</span>
-                    .<span class="ident">send</span>(<span class="prelude-val">Err</span>(<span class="ident">BatchMessageError</span> { <span class="ident">id</span>: <span class="ident">digest</span> }))
-                    .<span class="kw">await</span>
-                    .<span class="ident">expect</span>(<span class="string">&quot;Failed to send batch result&quot;</span>),
-                <span class="ident">WorkerPrimaryError::ErrorWhileDeletingBatches</span>(<span class="ident">batch_ids</span>) =&gt; <span class="self">self</span>
-                    .<span class="ident">tx_batch_removal</span>
-                    .<span class="ident">send</span>(<span class="prelude-val">Err</span>(<span class="ident">DeleteBatchMessage</span> { <span class="ident">ids</span>: <span class="ident">batch_ids</span> }))
-                    .<span class="kw">await</span>
-                    .<span class="ident">expect</span>(<span class="string">&quot;Failed to send error batch delete result&quot;</span>),
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| DagError::ShuttingDown),
+            WorkerPrimaryMessage::DeletedBatches(batch_ids) =&gt; <span class="self">self
+                </span>.tx_batch_removal
+                .send(<span class="prelude-val">Ok</span>(DeleteBatchMessage { ids: batch_ids }))
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| DagError::ShuttingDown),
+            WorkerPrimaryMessage::Error(error) =&gt; <span class="kw">match </span>error.clone() {
+                WorkerPrimaryError::RequestedBatchNotFound(digest) =&gt; <span class="self">self
+                    </span>.tx_batches
+                    .send(<span class="prelude-val">Err</span>(BatchMessageError { id: digest }))
+                    .<span class="kw">await
+                    </span>.map_err(|<span class="kw">_</span>| DagError::ShuttingDown),
+                WorkerPrimaryError::ErrorWhileDeletingBatches(batch_ids) =&gt; <span class="self">self
+                    </span>.tx_batch_removal
+                    .send(<span class="prelude-val">Err</span>(DeleteBatchMessage { ids: batch_ids }))
+                    .<span class="kw">await
+                    </span>.map_err(|<span class="kw">_</span>| DagError::ShuttingDown),
             },
+            WorkerPrimaryMessage::Reconfigure(notification) =&gt; <span class="self">self
+                </span>.tx_state_handler
+                .send(notification)
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| DagError::ShuttingDown),
         }
+        .map_err(|e| Status::not_found(e.to_string()))<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(<span class="ident">Response::new</span>(<span class="ident">Empty</span> {}))
+        <span class="prelude-val">Ok</span>(Response::new(Empty {}))
+    }
+
+    <span class="kw">async fn </span>worker_info(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _request: Request&lt;Empty&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Response&lt;BincodeEncodedPayload&gt;, Status&gt; {
+        <span class="kw">let </span>workers = WorkerInfoResponse {
+            workers: <span class="self">self</span>.our_workers.clone(),
+        };
+
+        <span class="kw">let </span>response = BincodeEncodedPayload::try_from(<span class="kw-2">&amp;</span>workers)
+            .map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(Response::new(response))
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="primary" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.62.0-nightly (88860d547 2022-05-09)" ></div>
-</body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="primary" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (2e35f954a 2022-09-01)" ></div></body></html>
