@@ -975,8 +975,8 @@
 /// # use arc_swap::ArcSwap;
 /// # use fastcrypto::Hash;
 /// # use std::env::temp_dir;
-/// # use fastcrypto::ed25519::Ed25519PublicKey;
 /// # use config::{Committee, WorkerCache, SharedWorkerCache};
+/// # use crypto::PublicKey;
 /// # use std::collections::BTreeMap;
 /// # use types::Certificate;
 /// # use primary::{BlockWaiter, BlockHeader, BlockCommand, block_synchronizer::{BlockSynchronizeResult, handler::{Error, Handler}}};
@@ -1015,7 +1015,7 @@
 ///     let (tx_batches, rx_batches) = test_utils::test_channel!(1);
 ///     let (tx_get_block, mut rx_get_block) = oneshot::channel();
 ///
-///     let name = Ed25519PublicKey::default();
+///     let name = PublicKey::default();
 ///     let committee = Committee{ epoch: 0, authorities: BTreeMap::new() };
 ///     let worker_cache: SharedWorkerCache = WorkerCache{ epoch: 0, workers: BTreeMap::new() }.into();
 ///     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -1701,4 +1701,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="primary" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (b44197abb 2022-09-05)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="primary" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (59e7a308e 2022-09-11)" ></div></body></html>

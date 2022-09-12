@@ -265,7 +265,7 @@
 </span><span class="kw">use crate</span>::{primary::PrimaryMessage, PayloadToken};
 <span class="kw">use </span>config::{Committee, WorkerId};
 <span class="kw">use </span>crypto::PublicKey;
-<span class="kw">use </span>network::{PrimaryNetwork, UnreliableNetwork2};
+<span class="kw">use </span>network::{P2pNetwork, UnreliableNetwork2};
 <span class="kw">use </span>storage::CertificateStore;
 <span class="kw">use </span>store::{Store, StoreError};
 <span class="kw">use </span>thiserror::Error;
@@ -304,7 +304,7 @@
     <span class="doccomment">/// Input channel to receive requests.
     </span>rx_primaries: Receiver&lt;PrimaryMessage&gt;,
     <span class="doccomment">/// A network sender to reply to the sync requests.
-    </span>primary_network: PrimaryNetwork,
+    </span>primary_network: P2pNetwork,
 }
 
 <span class="kw">impl </span>Helper {
@@ -316,7 +316,7 @@
         payload_store: Store&lt;(BatchDigest, WorkerId), PayloadToken&gt;,
         rx_committee: watch::Receiver&lt;ReconfigureNotification&gt;,
         rx_primaries: Receiver&lt;PrimaryMessage&gt;,
-        primary_network: PrimaryNetwork,
+        primary_network: P2pNetwork,
     ) -&gt; JoinHandle&lt;()&gt; {
         tokio::spawn(<span class="kw">async move </span>{
             <span class="self">Self </span>{
@@ -418,7 +418,7 @@
                     from: <span class="self">self</span>.name.clone(),
                 };
                 <span class="self">self</span>.primary_network
-                    .unreliable_send(origin.clone(), <span class="kw-2">&amp;</span>message)
+                    .unreliable_send(<span class="self">self</span>.committee.network_key(<span class="kw-2">&amp;</span>origin).unwrap(), <span class="kw-2">&amp;</span>message)
                     .<span class="kw">await</span>;
 
                 <span class="kw">return </span><span class="prelude-val">Err</span>(HelperError::StoreError(err));
@@ -456,7 +456,7 @@
             from: <span class="self">self</span>.name.clone(),
         };
         <span class="self">self</span>.primary_network
-            .unreliable_send(origin.clone(), <span class="kw-2">&amp;</span>message)
+            .unreliable_send(<span class="self">self</span>.committee.network_key(<span class="kw-2">&amp;</span>origin).unwrap(), <span class="kw-2">&amp;</span>message)
             .<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(())
@@ -505,14 +505,14 @@
             };
 
             <span class="self">self</span>.primary_network
-                .unreliable_send(origin.clone(), <span class="kw-2">&amp;</span>message)
+                .unreliable_send(<span class="self">self</span>.committee.network_key(<span class="kw-2">&amp;</span>origin).unwrap(), <span class="kw-2">&amp;</span>message)
                 .<span class="kw">await</span>;
         } <span class="kw">else </span>{
             <span class="kw">for </span>certificate <span class="kw">in </span>certificates.into_iter().flatten() {
                 <span class="comment">// TODO: Remove this deserialization-serialization in the critical path.
                 </span><span class="kw">let </span>message = PrimaryMessage::Certificate(certificate);
                 <span class="self">self</span>.primary_network
-                    .unreliable_send(origin.clone(), <span class="kw-2">&amp;</span>message)
+                    .unreliable_send(<span class="self">self</span>.committee.network_key(<span class="kw-2">&amp;</span>origin).unwrap(), <span class="kw-2">&amp;</span>message)
                     .<span class="kw">await</span>;
             }
         }
@@ -521,4 +521,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="primary" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (b44197abb 2022-09-05)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="primary" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (59e7a308e 2022-09-11)" ></div></body></html>

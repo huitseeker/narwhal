@@ -917,61 +917,37 @@
 <span id="917">917</span>
 <span id="918">918</span>
 <span id="919">919</span>
-<span id="920">920</span>
-<span id="921">921</span>
-<span id="922">922</span>
-<span id="923">923</span>
-<span id="924">924</span>
-<span id="925">925</span>
-<span id="926">926</span>
-<span id="927">927</span>
-<span id="928">928</span>
-<span id="929">929</span>
-<span id="930">930</span>
-<span id="931">931</span>
-<span id="932">932</span>
-<span id="933">933</span>
-<span id="934">934</span>
-<span id="935">935</span>
-<span id="936">936</span>
-<span id="937">937</span>
-<span id="938">938</span>
-<span id="939">939</span>
-<span id="940">940</span>
-<span id="941">941</span>
 </pre><pre class="rust"><code><span class="comment">// Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-</span><span class="kw">use </span>anemo::Network;
-<span class="kw">use </span>config::{
+
+</span><span class="kw">use </span>config::{
     utils::get_available_port, Authority, Committee, Epoch, PrimaryAddresses, SharedWorkerCache,
     WorkerCache, WorkerId, WorkerIndex, WorkerInfo,
 };
-<span class="kw">use </span>crypto::{KeyPair, PublicKey, Signature};
+<span class="kw">use </span>crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey};
 <span class="kw">use </span>fastcrypto::{
     traits::{KeyPair <span class="kw">as _</span>, Signer <span class="kw">as _</span>},
     Digest, Hash <span class="kw">as _</span>,
 };
-<span class="kw">use </span>futures::Stream;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>multiaddr::Multiaddr;
-<span class="kw">use </span>rand::{rngs::StdRng, Rng, SeedableRng <span class="kw">as _</span>};
-<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>rand::{rngs::OsRng, Rng};
 <span class="kw">use </span>std::{
-    collections::{BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    num::NonZeroUsize,
     ops::RangeInclusive,
-    pin::Pin,
+    sync::Arc,
 };
 <span class="kw">use </span>store::{reopen, rocks, rocks::DBMap, Store};
 <span class="kw">use </span>tokio::sync::mpsc::{channel, Receiver, Sender};
-<span class="kw">use </span>tonic::{async_trait, Response};
+<span class="kw">use </span>tonic::async_trait;
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>types::{
-    serialized_batch_digest, Batch, BatchDigest, BincodeEncodedPayload, Certificate,
-    CertificateDigest, ConsensusStore, Empty, Header, HeaderBuilder, PrimaryMessage,
-    PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer, Round,
-    SequenceNumber, Transaction, Vote, WorkerToPrimary, WorkerToPrimaryServer, WorkerToWorker,
-    WorkerToWorkerServer,
+    Batch, BatchDigest, BincodeEncodedPayload, Certificate, CertificateDigest, ConsensusStore,
+    Empty, Header, HeaderBuilder, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
+    PrimaryToWorker, PrimaryToWorkerServer, Round, SequenceNumber, Transaction, Vote,
+    WorkerMessage, WorkerToPrimary, WorkerToPrimaryServer, WorkerToWorker, WorkerToWorkerServer,
 };
 
 <span class="kw">pub mod </span>cluster;
@@ -1053,208 +1029,15 @@
 </span><span class="doccomment">/// Keys, Committee
 </span><span class="comment">////////////////////////////////////////////////////////////////
 
-// Fixture
-</span><span class="kw">pub fn </span>keys_with_len(rng_seed: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;, num_keys: usize) -&gt; Vec&lt;KeyPair&gt; {
-    <span class="kw">let </span>seed = rng_seed.into().unwrap_or(<span class="number">0u64</span>).to_le_bytes();
-    <span class="kw">let </span><span class="kw-2">mut </span>rng_arg = [<span class="number">0u8</span>; <span class="number">32</span>];
-    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">4 </span>{
-        rng_arg[i * <span class="number">8</span>..(i + <span class="number">1</span>) * <span class="number">8</span>].copy_from_slice(<span class="kw-2">&amp;</span>seed[..]);
-    }
-
-    <span class="kw">let </span><span class="kw-2">mut </span>rng = StdRng::from_seed(rng_arg);
-    (<span class="number">0</span>..num_keys).map(|<span class="kw">_</span>| KeyPair::generate(<span class="kw-2">&amp;mut </span>rng)).collect()
-}
-
-<span class="kw">pub fn </span>keys(rng_seed: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;) -&gt; Vec&lt;KeyPair&gt; {
-    keys_with_len(rng_seed, <span class="number">4</span>)
-}
-
-<span class="comment">// Fixture
-</span><span class="kw">pub fn </span>committee(rng_seed: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;) -&gt; Committee {
-    pure_committee_from_keys(<span class="kw-2">&amp;</span>keys(rng_seed))
-}
-
-<span class="kw">pub fn </span>pure_committee_from_keys(keys: <span class="kw-2">&amp;</span>[KeyPair]) -&gt; Committee {
-    Committee {
-        epoch: Epoch::default(),
-        authorities: keys
-            .iter()
-            .map(|kp| (kp.public().clone(), make_authority()))
-            .collect(),
-    }
-}
-
-<span class="kw">pub fn </span>pure_committee_from_keys_with_mock_ports(keys: <span class="kw-2">&amp;</span>[KeyPair]) -&gt; Committee {
-    Committee {
-        epoch: Epoch::default(),
-        authorities: keys
-            .iter()
-            .map(|kp| (kp.public().clone(), make_authority_with_port_getter(|| <span class="number">0</span>)))
-            .collect(),
-    }
-}
-
-<span class="kw">pub fn </span>make_authority_with_port_getter&lt;F: FnMut() -&gt; u16&gt;(<span class="kw-2">mut </span>get_port: F) -&gt; Authority {
-    <span class="kw">let </span>primary = PrimaryAddresses {
-        primary_to_primary: <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
-            .parse()
-            .unwrap(),
-        worker_to_primary: <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
-            .parse()
-            .unwrap(),
-    };
-
-    Authority { stake: <span class="number">1</span>, primary }
-}
-
-<span class="kw">pub fn </span>make_authority() -&gt; Authority {
-    make_authority_with_port_getter(get_available_port)
-}
-
-<span class="comment">// Fixture
-</span><span class="kw">pub fn </span>shared_worker_cache(rng_seed: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;) -&gt; SharedWorkerCache {
-    shared_worker_cache_from_keys(<span class="kw-2">&amp;</span>keys(rng_seed))
-}
-
-<span class="kw">pub fn </span>shared_worker_cache_from_keys(keys: <span class="kw-2">&amp;</span>[KeyPair]) -&gt; SharedWorkerCache {
-    worker_cache_from_keys(keys).into()
-}
-
-<span class="kw">pub fn </span>worker_cache_from_keys(keys: <span class="kw-2">&amp;</span>[KeyPair]) -&gt; WorkerCache {
-    WorkerCache {
-        epoch: Epoch::default(),
-        workers: keys
-            .iter()
-            .map(|kp| (kp.public().clone(), make_worker_index()))
-            .collect(),
-    }
-}
-
-<span class="kw">pub fn </span>make_worker_index() -&gt; WorkerIndex {
-    initialize_worker_index_with_port_getter(get_available_port)
-}
-
-<span class="kw">pub fn </span>initialize_worker_index_with_port_getter&lt;F: FnMut() -&gt; u16&gt;(<span class="kw-2">mut </span>get_port: F) -&gt; WorkerIndex {
-    <span class="kw">let </span>workers = <span class="macro">vec!</span>[
-        (
-            <span class="number">0</span>,
-            WorkerInfo {
-                primary_to_worker: <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
-                    .parse()
-                    .unwrap(),
-                transactions: <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
-                    .parse()
-                    .unwrap(),
-                worker_to_worker: <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
-                    .parse()
-                    .unwrap(),
-            },
-        ),
-        (
-            <span class="number">1</span>,
-            WorkerInfo {
-                primary_to_worker: <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
-                    .parse()
-                    .unwrap(),
-                transactions: <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
-                    .parse()
-                    .unwrap(),
-                worker_to_worker: <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
-                    .parse()
-                    .unwrap(),
-            },
-        ),
-        (
-            <span class="number">2</span>,
-            WorkerInfo {
-                primary_to_worker: <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
-                    .parse()
-                    .unwrap(),
-                transactions: <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
-                    .parse()
-                    .unwrap(),
-                worker_to_worker: <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
-                    .parse()
-                    .unwrap(),
-            },
-        ),
-        (
-            <span class="number">3</span>,
-            WorkerInfo {
-                primary_to_worker: <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
-                    .parse()
-                    .unwrap(),
-                transactions: <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
-                    .parse()
-                    .unwrap(),
-                worker_to_worker: <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
-                    .parse()
-                    .unwrap(),
-            },
-        ),
-    ]
-    .iter()
-    .cloned()
-    .collect();
-
-    WorkerIndex(workers)
+</span><span class="kw">pub fn </span>random_key() -&gt; KeyPair {
+    KeyPair::generate(<span class="kw-2">&amp;mut </span>OsRng)
 }
 
 <span class="comment">////////////////////////////////////////////////////////////////
 </span><span class="doccomment">/// Headers, Votes, Certificates
 </span><span class="comment">////////////////////////////////////////////////////////////////
 
-// Fixture
-</span><span class="kw">pub fn </span>mock_committee(keys: <span class="kw-2">&amp;</span>[PublicKey]) -&gt; Committee {
-    Committee {
-        epoch: Epoch::default(),
-        authorities: keys
-            .iter()
-            .map(|id| {
-                (
-                    id.clone(),
-                    Authority {
-                        stake: <span class="number">1</span>,
-                        primary: PrimaryAddresses {
-                            primary_to_primary: <span class="string">&quot;/ip4/0.0.0.0/tcp/0/http&quot;</span>.parse().unwrap(),
-                            worker_to_primary: <span class="string">&quot;/ip4/0.0.0.0/tcp/0/http&quot;</span>.parse().unwrap(),
-                        },
-                    },
-                )
-            })
-            .collect(),
-    }
-}
-
-<span class="comment">// Fixture
-</span><span class="kw">pub fn </span>mock_worker_cache(keys: <span class="kw-2">&amp;</span>[PublicKey]) -&gt; WorkerCache {
-    WorkerCache {
-        epoch: Epoch::default(),
-        workers: keys
-            .iter()
-            .map(|id| {
-                (
-                    id.clone(),
-                    WorkerIndex(
-                        <span class="macro">vec!</span>[(
-                            <span class="number">0</span>,
-                            WorkerInfo {
-                                primary_to_worker: <span class="string">&quot;/ip4/0.0.0.0/tcp/0/http&quot;</span>.parse().unwrap(),
-                                transactions: <span class="string">&quot;/ip4/0.0.0.0/tcp/0/http&quot;</span>.parse().unwrap(),
-                                worker_to_worker: <span class="string">&quot;/ip4/0.0.0.0/tcp/0/http&quot;</span>.parse().unwrap(),
-                            },
-                        )]
-                        .iter()
-                        .cloned()
-                        .collect(),
-                    ),
-                )
-            })
-            .collect(),
-    }
-}
-
-<span class="kw">pub fn </span>make_consensus_store(store_path: <span class="kw-2">&amp;</span>std::path::Path) -&gt; Arc&lt;ConsensusStore&gt; {
+</span><span class="kw">pub fn </span>make_consensus_store(store_path: <span class="kw-2">&amp;</span>std::path::Path) -&gt; Arc&lt;ConsensusStore&gt; {
     <span class="kw">const </span>LAST_COMMITTED_CF: <span class="kw-2">&amp;</span>str = <span class="string">&quot;last_committed&quot;</span>;
     <span class="kw">const </span>SEQUENCE_CF: <span class="kw-2">&amp;</span>str = <span class="string">&quot;sequence&quot;</span>;
 
@@ -1269,126 +1052,16 @@
     Arc::new(ConsensusStore::new(last_committed_map, sequence_map))
 }
 
-<span class="comment">// Fixture
-</span><span class="kw">pub fn </span>header() -&gt; Header {
-    header_with_epoch(<span class="kw-2">&amp;</span>committee(<span class="prelude-val">None</span>))
-}
-
-<span class="comment">// Fixture
-</span><span class="kw">pub fn </span>headers() -&gt; Vec&lt;Header&gt; {
-    keys(<span class="prelude-val">None</span>)
-        .into_iter()
-        .map(|kp| {
-            <span class="kw">let </span>header = Header {
-                author: kp.public().clone(),
-                round: <span class="number">1</span>,
-                parents: Certificate::genesis(<span class="kw-2">&amp;</span>committee(<span class="prelude-val">None</span>))
-                    .iter()
-                    .map(|x| x.digest())
-                    .collect(),
-                ..Header::default()
-            };
-            <span class="kw">let </span>header_digest = header.digest();
-            Header {
-                id: header_digest,
-                signature: kp.sign(Digest::from(header_digest).as_ref()),
-                ..header
-            }
-        })
-        .collect()
-}
-
-<span class="comment">// Fixture
-</span><span class="kw">pub fn </span>header_with_epoch(committee: <span class="kw-2">&amp;</span>Committee) -&gt; Header {
-    <span class="kw">let </span>kp = keys(<span class="prelude-val">None</span>).pop().unwrap();
-    <span class="kw">let </span>header = Header {
-        author: kp.public().clone(),
-        round: <span class="number">1</span>,
-        epoch: committee.epoch(),
-        parents: Certificate::genesis(committee)
-            .iter()
-            .map(|x| x.digest())
-            .collect(),
-        ..Header::default()
-    };
-
-    <span class="kw">let </span>header_digest = header.digest();
-    Header {
-        id: header_digest,
-        signature: kp.sign(Digest::from(header_digest).as_ref()),
-        ..header
-    }
-}
-
-<span class="attribute">#[allow(dead_code)]
-</span><span class="kw">pub fn </span>fixture_header() -&gt; Header {
-    <span class="kw">let </span>kp = keys(<span class="prelude-val">None</span>).pop().unwrap();
-
-    fixture_header_builder().build(<span class="kw-2">&amp;</span>kp).unwrap()
-}
-
-<span class="kw">pub fn </span>fixture_header_builder() -&gt; types::HeaderBuilder {
-    <span class="kw">let </span>kp = keys(<span class="prelude-val">None</span>).pop().unwrap();
-
-    <span class="kw">let </span>builder = types::HeaderBuilder::default();
-    builder
-        .author(kp.public().clone())
-        .round(<span class="number">1</span>)
-        .epoch(<span class="number">0</span>)
-        .parents(
-            Certificate::genesis(<span class="kw-2">&amp;</span>committee(<span class="prelude-val">None</span>))
-                .iter()
-                .map(|x| x.digest())
-                .collect(),
-        )
-}
-
-<span class="kw">pub fn </span>fixture_headers_round(
-    prior_round: Round,
-    parents: <span class="kw-2">&amp;</span>BTreeSet&lt;CertificateDigest&gt;,
-) -&gt; (Round, Vec&lt;Header&gt;) {
-    <span class="kw">let </span>round = prior_round + <span class="number">1</span>;
-    <span class="kw">let </span>next_headers: Vec&lt;<span class="kw">_</span>&gt; = keys(<span class="prelude-val">None</span>)
-        .into_iter()
-        .map(|kp| {
-            <span class="kw">let </span>builder = types::HeaderBuilder::default();
-            builder
-                .author(kp.public().clone())
-                .round(round)
-                .epoch(<span class="number">0</span>)
-                .parents(parents.clone())
-                .with_payload_batch(fixture_batch_with_transactions(<span class="number">10</span>), <span class="number">0</span>)
-                .build(<span class="kw-2">&amp;</span>kp)
-                .unwrap()
-        })
-        .collect();
-    (round, next_headers)
-}
-
 <span class="kw">pub fn </span>fixture_payload(number_of_batches: u8) -&gt; IndexMap&lt;BatchDigest, WorkerId&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>payload: IndexMap&lt;BatchDigest, WorkerId&gt; = IndexMap::new();
 
-    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..number_of_batches {
-        <span class="kw">let </span>dummy_serialized_batch = <span class="macro">vec!</span>[
-            <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="comment">// enum variant prefix
-            </span><span class="number">1u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="comment">// num txes
-            </span><span class="number">5u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="number">0u8</span>, <span class="comment">// tx length
-            </span><span class="number">10u8</span>, <span class="number">5u8</span>, <span class="number">8u8</span>, <span class="number">20u8</span>, i, <span class="comment">//tx
-        </span>];
-        <span class="kw">let </span>batch_digest = serialized_batch_digest(<span class="kw-2">&amp;</span>dummy_serialized_batch).unwrap();
+    <span class="kw">for _ in </span><span class="number">0</span>..number_of_batches {
+        <span class="kw">let </span>batch_digest = batch().digest();
 
         payload.insert(batch_digest, <span class="number">0</span>);
     }
 
     payload
-}
-
-<span class="kw">pub fn </span>fixture_header_with_payload(number_of_batches: u8) -&gt; Header {
-    <span class="kw">let </span>kp = keys(<span class="prelude-val">None</span>).pop().unwrap();
-    <span class="kw">let </span>payload = fixture_payload(number_of_batches);
-
-    <span class="kw">let </span>builder = fixture_header_builder();
-    builder.payload(payload).build(<span class="kw-2">&amp;</span>kp).unwrap()
 }
 
 <span class="comment">// will create a batch with randomly formed transactions
@@ -1407,65 +1080,28 @@
     </span>(<span class="number">0</span>..<span class="number">100</span>).map(|_v| rand::random::&lt;u8&gt;()).collect()
 }
 
-<span class="comment">// Fixture
-</span><span class="kw">pub fn </span>votes(header: <span class="kw-2">&amp;</span>Header) -&gt; Vec&lt;Vote&gt; {
-    keys(<span class="prelude-val">None</span>)
-        .into_iter()
-        .flat_map(|kp| {
-            <span class="comment">// we should not re-sign using the key of the authority
-            // that produced the header
-            </span><span class="kw">if </span>kp.public() == <span class="kw-2">&amp;</span>header.author {
-                <span class="prelude-val">None
-            </span>} <span class="kw">else </span>{
-                <span class="kw">let </span>vote = Vote {
-                    id: header.id,
-                    round: header.round,
-                    epoch: header.epoch,
-                    origin: header.author.clone(),
-                    author: kp.public().clone(),
-                    signature: Signature::default(),
-                };
-                <span class="prelude-val">Some</span>(Vote {
-                    signature: kp.sign(Digest::from(vote.digest()).as_ref()),
-                    ..vote
-                })
-            }
-        })
-        .collect()
-}
-
-<span class="comment">// Fixture
-</span><span class="kw">pub fn </span>certificate_from_committee(header: <span class="kw-2">&amp;</span>Header, committee: <span class="kw-2">&amp;</span>Committee) -&gt; Certificate {
-    <span class="kw">let </span>votes: Vec&lt;<span class="kw">_</span>&gt; = votes(header)
-        .into_iter()
-        .map(|x| (x.author, x.signature))
-        .collect();
-    Certificate::new(committee, header.clone(), votes).unwrap()
-}
-
-<span class="kw">pub fn </span>certificate(header: <span class="kw-2">&amp;</span>Header) -&gt; Certificate {
-    certificate_from_committee(header, <span class="kw-2">&amp;</span>committee(<span class="prelude-val">None</span>))
-}
-
 <span class="attribute">#[derive(Clone)]
 </span><span class="kw">pub struct </span>PrimaryToPrimaryMockServer {
     sender: Sender&lt;PrimaryMessage&gt;,
 }
 
 <span class="kw">impl </span>PrimaryToPrimaryMockServer {
-    <span class="kw">pub fn </span>spawn(keypair: KeyPair, address: Multiaddr) -&gt; (Receiver&lt;PrimaryMessage&gt;, Network) {
+    <span class="kw">pub fn </span>spawn(
+        network_keypair: NetworkKeyPair,
+        address: Multiaddr,
+    ) -&gt; (Receiver&lt;PrimaryMessage&gt;, anemo::Network) {
         <span class="kw">let </span>addr = network::multiaddr_to_address(<span class="kw-2">&amp;</span>address).unwrap();
-        <span class="kw">let </span>(sender, reciever) = channel(<span class="number">1</span>);
+        <span class="kw">let </span>(sender, receiver) = channel(<span class="number">1</span>);
         <span class="kw">let </span>service = PrimaryToPrimaryServer::new(<span class="self">Self </span>{ sender });
 
         <span class="kw">let </span>routes = anemo::Router::new().add_rpc_service(service);
         <span class="kw">let </span>network = anemo::Network::bind(addr)
             .server_name(<span class="string">&quot;narwhal&quot;</span>)
-            .private_key(keypair.private().<span class="number">0</span>.to_bytes())
+            .private_key(network_keypair.private().<span class="number">0</span>.to_bytes())
             .start(routes)
             .unwrap();
         <span class="macro">info!</span>(<span class="string">&quot;starting network on: {}&quot;</span>, network.local_addr());
-        (reciever, network)
+        (receiver, network)
     }
 }
 
@@ -1473,7 +1109,7 @@
 </span><span class="kw">impl </span>PrimaryToPrimary <span class="kw">for </span>PrimaryToPrimaryMockServer {
     <span class="kw">async fn </span>send_message(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        request: anemo::Request&lt;types::PrimaryMessage&gt;,
+        request: anemo::Request&lt;PrimaryMessage&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;anemo::Response&lt;()&gt;, anemo::rpc::Status&gt; {
         <span class="kw">let </span>message = request.into_body();
 
@@ -1506,14 +1142,14 @@
     }
 }
 
-<span class="attribute">#[tonic::async_trait]
+<span class="attribute">#[async_trait]
 </span><span class="kw">impl </span>WorkerToPrimary <span class="kw">for </span>WorkerToPrimaryMockServer {
     <span class="kw">async fn </span>send_message(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         request: tonic::Request&lt;BincodeEncodedPayload&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;Empty&gt;, tonic::Status&gt; {
         <span class="self">self</span>.sender.send(request.into_inner()).<span class="kw">await</span>.unwrap();
-        <span class="prelude-val">Ok</span>(Response::new(Empty {}))
+        <span class="prelude-val">Ok</span>(tonic::Response::new(Empty {}))
     }
 
     <span class="kw">async fn </span>worker_info(
@@ -1547,71 +1183,53 @@
     }
 }
 
-<span class="attribute">#[tonic::async_trait]
+<span class="attribute">#[async_trait]
 </span><span class="kw">impl </span>PrimaryToWorker <span class="kw">for </span>PrimaryToWorkerMockServer {
     <span class="kw">async fn </span>send_message(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         request: tonic::Request&lt;BincodeEncodedPayload&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;Empty&gt;, tonic::Status&gt; {
         <span class="self">self</span>.sender.send(request.into_inner()).<span class="kw">await</span>.unwrap();
-        <span class="prelude-val">Ok</span>(Response::new(Empty {}))
+        <span class="prelude-val">Ok</span>(tonic::Response::new(Empty {}))
     }
 }
 
 <span class="kw">pub struct </span>WorkerToWorkerMockServer {
-    sender: Sender&lt;BincodeEncodedPayload&gt;,
+    sender: Sender&lt;WorkerMessage&gt;,
 }
 
 <span class="kw">impl </span>WorkerToWorkerMockServer {
-    <span class="kw">pub fn </span>spawn(address: Multiaddr) -&gt; Receiver&lt;BincodeEncodedPayload&gt; {
+    <span class="kw">pub fn </span>spawn(
+        keypair: NetworkKeyPair,
+        address: Multiaddr,
+    ) -&gt; (Receiver&lt;WorkerMessage&gt;, anemo::Network) {
+        <span class="kw">let </span>addr = network::multiaddr_to_address(<span class="kw-2">&amp;</span>address).unwrap();
         <span class="kw">let </span>(sender, receiver) = channel(<span class="number">1</span>);
-        tokio::spawn(<span class="kw">async move </span>{
-            <span class="kw">let </span>config = mysten_network::config::Config::new();
-            <span class="kw">let </span>mock = <span class="self">Self </span>{ sender };
-            config
-                .server_builder()
-                .add_service(WorkerToWorkerServer::new(mock))
-                .bind(<span class="kw-2">&amp;</span>address)
-                .<span class="kw">await
-                </span>.unwrap()
-                .serve()
-                .<span class="kw">await
-        </span>});
-        receiver
+        <span class="kw">let </span>service = WorkerToWorkerServer::new(<span class="self">Self </span>{ sender });
+
+        <span class="kw">let </span>routes = anemo::Router::new().add_rpc_service(service);
+        <span class="kw">let </span>network = anemo::Network::bind(addr)
+            .server_name(<span class="string">&quot;narwhal&quot;</span>)
+            .private_key(keypair.private().<span class="number">0</span>.to_bytes())
+            .start(routes)
+            .unwrap();
+        <span class="macro">info!</span>(<span class="string">&quot;starting network on: {}&quot;</span>, network.local_addr());
+        (receiver, network)
     }
 }
 
-<span class="attribute">#[tonic::async_trait]
+<span class="attribute">#[async_trait]
 </span><span class="kw">impl </span>WorkerToWorker <span class="kw">for </span>WorkerToWorkerMockServer {
     <span class="kw">async fn </span>send_message(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        request: tonic::Request&lt;BincodeEncodedPayload&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;Empty&gt;, tonic::Status&gt; {
-        <span class="self">self</span>.sender.send(request.into_inner()).<span class="kw">await</span>.unwrap();
-        <span class="prelude-val">Ok</span>(Response::new(Empty {}))
+        request: anemo::Request&lt;WorkerMessage&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;anemo::Response&lt;()&gt;, anemo::rpc::Status&gt; {
+        <span class="kw">let </span>message = request.into_body();
+
+        <span class="self">self</span>.sender.send(message).<span class="kw">await</span>.unwrap();
+
+        <span class="prelude-val">Ok</span>(anemo::Response::new(()))
     }
-
-    <span class="kw">type </span>ClientBatchRequestStream =
-        Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;BincodeEncodedPayload, tonic::Status&gt;&gt; + Send&gt;&gt;;
-
-    <span class="kw">async fn </span>client_batch_request(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _request: tonic::Request&lt;BincodeEncodedPayload&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="self">Self</span>::ClientBatchRequestStream&gt;, tonic::Status&gt; {
-        <span class="macro">todo!</span>()
-    }
-}
-
-<span class="comment">// helper method to get a name and a committee + worker_cache.
-</span><span class="kw">pub fn </span>resolve_name_committee_and_worker_cache() -&gt; (PublicKey, Committee, SharedWorkerCache) {
-    <span class="kw">let </span><span class="kw-2">mut </span>keys = keys(<span class="prelude-val">None</span>);
-    <span class="kw">let </span>committee = pure_committee_from_keys(<span class="kw-2">&amp;</span>keys);
-    <span class="kw">let </span>worker_cache = shared_worker_cache_from_keys(<span class="kw-2">&amp;</span>keys);
-    <span class="kw">let _ </span>= keys.pop().unwrap(); <span class="comment">// Skip the header&#39; author.
-    </span><span class="kw">let </span>kp = keys.pop().unwrap();
-    <span class="kw">let </span>name = kp.public().clone();
-
-    (name, committee, worker_cache)
 }
 
 <span class="comment">////////////////////////////////////////////////////////////////
@@ -1621,26 +1239,6 @@
 // Fixture
 </span><span class="kw">pub fn </span>batch() -&gt; Batch {
     Batch(<span class="macro">vec!</span>[transaction(), transaction()])
-}
-
-<span class="comment">// Fixture
-</span><span class="kw">pub fn </span>batch_digest() -&gt; BatchDigest {
-    serialized_batch_digest(<span class="kw-2">&amp;</span>serialized_batch()).unwrap()
-}
-
-<span class="kw">pub fn </span>digest_batch(batch: Batch) -&gt; BatchDigest {
-    <span class="kw">let </span>serialized_batch = serialize_batch_message(batch);
-    serialized_batch_digest(<span class="kw-2">&amp;</span>serialized_batch).unwrap()
-}
-
-<span class="comment">// Fixture
-</span><span class="kw">pub fn </span>serialized_batch() -&gt; Vec&lt;u8&gt; {
-    serialize_batch_message(batch())
-}
-
-<span class="kw">pub fn </span>serialize_batch_message(batch: Batch) -&gt; Vec&lt;u8&gt; {
-    <span class="kw">let </span>message = worker::WorkerMessage::Batch(batch);
-    bincode::serialize(<span class="kw-2">&amp;</span>message).unwrap()
 }
 
 <span class="doccomment">/// generate multiple fixture batches. The number of generated batches
@@ -1667,13 +1265,8 @@
 
 <span class="kw">const </span>BATCHES_CF: <span class="kw-2">&amp;</span>str = <span class="string">&quot;batches&quot;</span>;
 
-<span class="kw">pub fn </span>open_batch_store() -&gt; Store&lt;BatchDigest, types::SerializedBatchMessage&gt; {
-    <span class="kw">let </span>db = rocks::DBMap::&lt;BatchDigest, types::SerializedBatchMessage&gt;::open(
-        temp_dir(),
-        <span class="prelude-val">None</span>,
-        <span class="prelude-val">Some</span>(BATCHES_CF),
-    )
-    .unwrap();
+<span class="kw">pub fn </span>open_batch_store() -&gt; Store&lt;BatchDigest, Batch&gt; {
+    <span class="kw">let </span>db = DBMap::&lt;BatchDigest, Batch&gt;::open(temp_dir(), <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(BATCHES_CF)).unwrap();
     Store::new(db)
 }
 
@@ -1682,20 +1275,22 @@
 // of digests to be used as parents for the certificates of the next round.
 // Note : the certificates are unsigned
 </span><span class="kw">pub fn </span>make_optimal_certificates(
+    committee: <span class="kw-2">&amp;</span>Committee,
     range: RangeInclusive&lt;Round&gt;,
     initial_parents: <span class="kw-2">&amp;</span>BTreeSet&lt;CertificateDigest&gt;,
     keys: <span class="kw-2">&amp;</span>[PublicKey],
 ) -&gt; (VecDeque&lt;Certificate&gt;, BTreeSet&lt;CertificateDigest&gt;) {
-    make_certificates(range, initial_parents, keys, <span class="number">0.0</span>)
+    make_certificates(committee, range, initial_parents, keys, <span class="number">0.0</span>)
 }
 
 <span class="comment">// Outputs rounds worth of certificates with optimal parents, signed
 </span><span class="kw">pub fn </span>make_optimal_signed_certificates(
     range: RangeInclusive&lt;Round&gt;,
     initial_parents: <span class="kw-2">&amp;</span>BTreeSet&lt;CertificateDigest&gt;,
+    committee: <span class="kw-2">&amp;</span>Committee,
     keys: <span class="kw-2">&amp;</span>[KeyPair],
 ) -&gt; (VecDeque&lt;Certificate&gt;, BTreeSet&lt;CertificateDigest&gt;) {
-    make_signed_certificates(range, initial_parents, keys, <span class="number">0.0</span>)
+    make_signed_certificates(range, initial_parents, committee, keys, <span class="number">0.0</span>)
 }
 
 <span class="comment">// Bernoulli-samples from a set of ancestors passed as a argument,
@@ -1747,22 +1342,20 @@
 
 <span class="comment">// make rounds worth of unsigned certificates with the sampled number of parents
 </span><span class="kw">pub fn </span>make_certificates(
+    committee: <span class="kw-2">&amp;</span>Committee,
     range: RangeInclusive&lt;Round&gt;,
     initial_parents: <span class="kw-2">&amp;</span>BTreeSet&lt;CertificateDigest&gt;,
     keys: <span class="kw-2">&amp;</span>[PublicKey],
     failure_probability: f64,
 ) -&gt; (VecDeque&lt;Certificate&gt;, BTreeSet&lt;CertificateDigest&gt;) {
-    rounds_of_certificates(
-        range,
-        initial_parents,
-        keys,
-        failure_probability,
-        mock_certificate,
-    )
+    <span class="kw">let </span>generator = |pk, round, parents| mock_certificate(committee, pk, round, parents);
+
+    rounds_of_certificates(range, initial_parents, keys, failure_probability, generator)
 }
 
 <span class="comment">// make rounds worth of unsigned certificates with the sampled number of parents
 </span><span class="kw">pub fn </span>make_certificates_with_epoch(
+    committee: <span class="kw-2">&amp;</span>Committee,
     range: RangeInclusive&lt;Round&gt;,
     epoch: Epoch,
     initial_parents: <span class="kw-2">&amp;</span>BTreeSet&lt;CertificateDigest&gt;,
@@ -1776,7 +1369,7 @@
         next_parents.clear();
         <span class="kw">for </span>name <span class="kw">in </span>keys {
             <span class="kw">let </span>(digest, certificate) =
-                mock_certificate_with_epoch(name.clone(), round, epoch, parents.clone());
+                mock_certificate_with_epoch(committee, name.clone(), round, epoch, parents.clone());
             certificates.push_back(certificate);
             next_parents.insert(digest);
         }
@@ -1789,11 +1382,13 @@
 </span><span class="kw">pub fn </span>make_signed_certificates(
     range: RangeInclusive&lt;Round&gt;,
     initial_parents: <span class="kw-2">&amp;</span>BTreeSet&lt;CertificateDigest&gt;,
+    committee: <span class="kw-2">&amp;</span>Committee,
     keys: <span class="kw-2">&amp;</span>[KeyPair],
     failure_probability: f64,
 ) -&gt; (VecDeque&lt;Certificate&gt;, BTreeSet&lt;CertificateDigest&gt;) {
     <span class="kw">let </span>public_keys = keys.iter().map(|k| k.public().clone()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-    <span class="kw">let </span>generator = |pk, round, parents| mock_signed_certificate(keys, pk, round, parents);
+    <span class="kw">let </span>generator =
+        |pk, round, parents| mock_signed_certificate(keys, pk, round, parents, committee);
 
     rounds_of_certificates(
         range,
@@ -1807,12 +1402,13 @@
 <span class="comment">// Creates an unsigned certificate from its given round, origin and parents,
 // Note: the certificate is unsigned
 </span><span class="kw">pub fn </span>mock_certificate(
+    committee: <span class="kw-2">&amp;</span>Committee,
     origin: PublicKey,
     round: Round,
     parents: BTreeSet&lt;CertificateDigest&gt;,
 ) -&gt; (CertificateDigest, Certificate) {
     <span class="kw">let </span>certificate = Certificate::new_unsigned(
-        <span class="kw-2">&amp;</span>committee(<span class="prelude-val">None</span>),
+        committee,
         Header {
             author: origin,
             round,
@@ -1829,13 +1425,14 @@
 <span class="comment">// Creates an unsigned certificate from its given round, epoch, origin, and parents,
 // Note: the certificate is unsigned
 </span><span class="kw">pub fn </span>mock_certificate_with_epoch(
+    committee: <span class="kw-2">&amp;</span>Committee,
     origin: PublicKey,
     round: Round,
     epoch: Epoch,
     parents: BTreeSet&lt;CertificateDigest&gt;,
 ) -&gt; (CertificateDigest, Certificate) {
     <span class="kw">let </span>certificate = Certificate::new_unsigned(
-        <span class="kw-2">&amp;</span>committee(<span class="prelude-val">None</span>),
+        committee,
         Header {
             author: origin,
             round,
@@ -1856,6 +1453,7 @@
     origin: PublicKey,
     round: Round,
     parents: BTreeSet&lt;CertificateDigest&gt;,
+    committee: <span class="kw-2">&amp;</span>Committee,
 ) -&gt; (CertificateDigest, Certificate) {
     <span class="kw">let </span>author = signers.iter().find(|kp| <span class="kw-2">*</span>kp.public() == origin).unwrap();
     <span class="kw">let </span>header_builder = HeaderBuilder::default()
@@ -1867,7 +1465,7 @@
 
     <span class="kw">let </span>header = header_builder.build(author).unwrap();
 
-    <span class="kw">let </span>cert = Certificate::new_unsigned(<span class="kw-2">&amp;</span>committee(<span class="prelude-val">None</span>), header.clone(), Vec::new()).unwrap();
+    <span class="kw">let </span>cert = Certificate::new_unsigned(committee, header.clone(), Vec::new()).unwrap();
 
     <span class="kw">let </span><span class="kw-2">mut </span>votes = Vec::new();
     <span class="kw">for </span>signer <span class="kw">in </span>signers {
@@ -1877,8 +1475,366 @@
             .unwrap();
         votes.push((pk.clone(), sig))
     }
-    <span class="kw">let </span>cert = Certificate::new(<span class="kw-2">&amp;</span>committee(<span class="prelude-val">None</span>), header, votes).unwrap();
+    <span class="kw">let </span>cert = Certificate::new(committee, header, votes).unwrap();
     (cert.digest(), cert)
 }
+
+<span class="kw">pub struct </span>Builder&lt;R = OsRng&gt; {
+    rng: R,
+    committee_size: NonZeroUsize,
+    number_of_workers: NonZeroUsize,
+    randomize_ports: bool,
+}
+
+<span class="kw">impl </span>Default <span class="kw">for </span>Builder {
+    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new()
+    }
+}
+
+<span class="kw">impl </span>Builder {
+    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            rng: OsRng,
+            committee_size: NonZeroUsize::new(<span class="number">4</span>).unwrap(),
+            number_of_workers: NonZeroUsize::new(<span class="number">4</span>).unwrap(),
+            randomize_ports: <span class="bool-val">false</span>,
+        }
+    }
+}
+
+<span class="kw">impl</span>&lt;R&gt; Builder&lt;R&gt; {
+    <span class="kw">pub fn </span>committee_size(<span class="kw-2">mut </span><span class="self">self</span>, committee_size: NonZeroUsize) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.committee_size = committee_size;
+        <span class="self">self
+    </span>}
+
+    <span class="kw">pub fn </span>number_of_workers(<span class="kw-2">mut </span><span class="self">self</span>, number_of_workers: NonZeroUsize) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.number_of_workers = number_of_workers;
+        <span class="self">self
+    </span>}
+
+    <span class="kw">pub fn </span>randomize_ports(<span class="kw-2">mut </span><span class="self">self</span>, randomize_ports: bool) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.randomize_ports = randomize_ports;
+        <span class="self">self
+    </span>}
+
+    <span class="kw">pub fn </span>rng&lt;N: rand::RngCore + rand::CryptoRng&gt;(<span class="self">self</span>, rng: N) -&gt; Builder&lt;N&gt; {
+        Builder {
+            rng,
+            committee_size: <span class="self">self</span>.committee_size,
+            number_of_workers: <span class="self">self</span>.number_of_workers,
+            randomize_ports: <span class="self">self</span>.randomize_ports,
+        }
+    }
+}
+
+<span class="kw">impl</span>&lt;R: rand::RngCore + rand::CryptoRng&gt; Builder&lt;R&gt; {
+    <span class="kw">pub fn </span>build(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; CommitteeFixture {
+        <span class="kw">let </span>get_port = || {
+            <span class="kw">if </span><span class="self">self</span>.randomize_ports {
+                get_available_port()
+            } <span class="kw">else </span>{
+                <span class="number">0
+            </span>}
+        };
+
+        <span class="kw">let </span>authorities = (<span class="number">0</span>..<span class="self">self</span>.committee_size.get())
+            .map(|<span class="kw">_</span>| AuthorityFixture::generate(<span class="kw-2">&amp;mut </span><span class="self">self</span>.rng, <span class="self">self</span>.number_of_workers, get_port))
+            .collect();
+
+        CommitteeFixture {
+            authorities,
+            epoch: Epoch::default(),
+        }
+    }
+}
+
+<span class="kw">pub struct </span>CommitteeFixture {
+    authorities: Vec&lt;AuthorityFixture&gt;,
+    epoch: Epoch,
+}
+
+<span class="kw">impl </span>CommitteeFixture {
+    <span class="kw">pub fn </span>authorities(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>AuthorityFixture&gt; {
+        <span class="self">self</span>.authorities.iter()
+    }
+
+    <span class="kw">pub fn </span>builder() -&gt; Builder {
+        Builder::new()
+    }
+
+    <span class="kw">pub fn </span>committee(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Committee {
+        Committee {
+            epoch: <span class="self">self</span>.epoch,
+            authorities: <span class="self">self
+                </span>.authorities
+                .iter()
+                .map(|a| {
+                    <span class="kw">let </span>pubkey = a.public_key();
+                    <span class="kw">let </span>authority = a.authority();
+                    (pubkey, authority)
+                })
+                .collect(),
+        }
+    }
+
+    <span class="kw">pub fn </span>worker_cache(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; WorkerCache {
+        WorkerCache {
+            epoch: <span class="self">self</span>.epoch,
+            workers: <span class="self">self
+                </span>.authorities
+                .iter()
+                .map(|a| (a.public_key(), a.worker_index()))
+                .collect(),
+        }
+    }
+
+    <span class="kw">pub fn </span>shared_worker_cache(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SharedWorkerCache {
+        <span class="self">self</span>.worker_cache().into()
+    }
+
+    <span class="comment">// pub fn header(&amp;self, author: PublicKey) -&gt; Header {
+    // Currently sign with the last authority
+    </span><span class="kw">pub fn </span>header(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Header {
+        <span class="self">self</span>.authorities.last().unwrap().header(<span class="kw-2">&amp;</span><span class="self">self</span>.committee())
+    }
+
+    <span class="kw">pub fn </span>headers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;Header&gt; {
+        <span class="kw">let </span>committee = <span class="self">self</span>.committee();
+
+        <span class="self">self</span>.authorities
+            .iter()
+            .map(|a| a.header(<span class="kw-2">&amp;</span>committee))
+            .collect()
+    }
+
+    <span class="kw">pub fn </span>headers_round(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        prior_round: Round,
+        parents: <span class="kw-2">&amp;</span>BTreeSet&lt;CertificateDigest&gt;,
+    ) -&gt; (Round, Vec&lt;Header&gt;) {
+        <span class="kw">let </span>round = prior_round + <span class="number">1</span>;
+        <span class="kw">let </span>next_headers = <span class="self">self
+            </span>.authorities
+            .iter()
+            .map(|a| {
+                <span class="kw">let </span>builder = types::HeaderBuilder::default();
+                builder
+                    .author(a.public_key())
+                    .round(round)
+                    .epoch(<span class="number">0</span>)
+                    .parents(parents.clone())
+                    .with_payload_batch(fixture_batch_with_transactions(<span class="number">10</span>), <span class="number">0</span>)
+                    .build(a.keypair())
+                    .unwrap()
+            })
+            .collect();
+
+        (round, next_headers)
+    }
+
+    <span class="kw">pub fn </span>votes(<span class="kw-2">&amp;</span><span class="self">self</span>, header: <span class="kw-2">&amp;</span>Header) -&gt; Vec&lt;Vote&gt; {
+        <span class="self">self</span>.authorities()
+            .flat_map(|a| {
+                <span class="comment">// we should not re-sign using the key of the authority
+                // that produced the header
+                </span><span class="kw">if </span>a.public_key() == header.author {
+                    <span class="prelude-val">None
+                </span>} <span class="kw">else </span>{
+                    <span class="prelude-val">Some</span>(a.vote(header))
+                }
+            })
+            .collect()
+    }
+
+    <span class="kw">pub fn </span>certificate(<span class="kw-2">&amp;</span><span class="self">self</span>, header: <span class="kw-2">&amp;</span>Header) -&gt; Certificate {
+        <span class="kw">let </span>committee = <span class="self">self</span>.committee();
+        <span class="kw">let </span>votes: Vec&lt;<span class="kw">_</span>&gt; = <span class="self">self
+            </span>.votes(header)
+            .into_iter()
+            .map(|x| (x.author, x.signature))
+            .collect();
+        Certificate::new(<span class="kw-2">&amp;</span>committee, header.clone(), votes).unwrap()
+    }
+
+    <span class="doccomment">/// Add a new authority to the commit by randoming generating a key
+    </span><span class="kw">pub fn </span>add_authority(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">let </span>authority =
+            AuthorityFixture::generate(OsRng, NonZeroUsize::new(<span class="number">4</span>).unwrap(), get_available_port);
+        <span class="self">self</span>.authorities.push(authority)
+    }
+
+    <span class="kw">pub fn </span>bump_epoch(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.epoch += <span class="number">1
+    </span>}
+}
+
+<span class="kw">pub struct </span>AuthorityFixture {
+    keypair: KeyPair,
+    network_keypair: NetworkKeyPair,
+    stake: u32,
+    addresses: PrimaryAddresses,
+    workers: BTreeMap&lt;WorkerId, WorkerFixture&gt;,
+}
+
+<span class="kw">impl </span>AuthorityFixture {
+    <span class="kw">pub fn </span>keypair(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>KeyPair {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.keypair
+    }
+
+    <span class="kw">pub fn </span>network_keypair(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>NetworkKeyPair {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.network_keypair
+    }
+
+    <span class="kw">pub fn </span>worker(<span class="kw-2">&amp;</span><span class="self">self</span>, id: WorkerId) -&gt; <span class="kw-2">&amp;</span>WorkerFixture {
+        <span class="self">self</span>.workers.get(<span class="kw-2">&amp;</span>id).unwrap()
+    }
+
+    <span class="kw">pub fn </span>worker_keypairs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;NetworkKeyPair&gt; {
+        <span class="self">self</span>.workers
+            .values()
+            .map(|worker| worker.keypair.copy())
+            .collect()
+    }
+
+    <span class="kw">pub fn </span>public_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PublicKey {
+        <span class="self">self</span>.keypair.public().clone()
+    }
+
+    <span class="kw">pub fn </span>network_public_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; NetworkPublicKey {
+        <span class="self">self</span>.network_keypair.public().clone()
+    }
+
+    <span class="kw">pub fn </span>authority(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Authority {
+        Authority {
+            stake: <span class="self">self</span>.stake,
+            primary: <span class="self">self</span>.addresses.clone(),
+            network_key: <span class="self">self</span>.network_keypair.public().clone(),
+        }
+    }
+
+    <span class="kw">pub fn </span>worker_index(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; WorkerIndex {
+        WorkerIndex(
+            <span class="self">self</span>.workers
+                .iter()
+                .map(|(id, w)| (<span class="kw-2">*</span>id, w.info.clone()))
+                .collect(),
+        )
+    }
+
+    <span class="kw">pub fn </span>header(<span class="kw-2">&amp;</span><span class="self">self</span>, committee: <span class="kw-2">&amp;</span>Committee) -&gt; Header {
+        <span class="self">self</span>.header_builder(committee)
+            .payload(Default::default())
+            .build(<span class="kw-2">&amp;</span><span class="self">self</span>.keypair)
+            .unwrap()
+    }
+
+    <span class="kw">pub fn </span>header_builder(<span class="kw-2">&amp;</span><span class="self">self</span>, committee: <span class="kw-2">&amp;</span>Committee) -&gt; types::HeaderBuilder {
+        types::HeaderBuilder::default()
+            .author(<span class="self">self</span>.public_key())
+            .round(<span class="number">1</span>)
+            .epoch(committee.epoch)
+            .parents(
+                Certificate::genesis(committee)
+                    .iter()
+                    .map(|x| x.digest())
+                    .collect(),
+            )
+    }
+
+    <span class="kw">pub fn </span>vote(<span class="kw-2">&amp;</span><span class="self">self</span>, header: <span class="kw-2">&amp;</span>Header) -&gt; Vote {
+        Vote::new_with_signer(header, <span class="self">self</span>.keypair.public(), <span class="kw-2">&amp;</span><span class="self">self</span>.keypair)
+    }
+
+    <span class="kw">fn </span>generate&lt;R, P&gt;(<span class="kw-2">mut </span>rng: R, number_of_workers: NonZeroUsize, <span class="kw-2">mut </span>get_port: P) -&gt; <span class="self">Self
+    </span><span class="kw">where
+        </span>R: rand::RngCore + rand::CryptoRng,
+        P: FnMut() -&gt; u16,
+    {
+        <span class="kw">let </span>keypair = KeyPair::generate(<span class="kw-2">&amp;mut </span>rng);
+        <span class="kw">let </span>network_keypair = NetworkKeyPair::generate(<span class="kw-2">&amp;mut </span>rng);
+        <span class="kw">let </span>primary_addresses = PrimaryAddresses {
+            primary_to_primary: <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
+                .parse()
+                .unwrap(),
+            worker_to_primary: <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
+                .parse()
+                .unwrap(),
+        };
+
+        <span class="kw">let </span>workers = (<span class="number">0</span>..number_of_workers.get())
+            .map(|idx| {
+                <span class="kw">let </span>worker = WorkerFixture::generate(<span class="kw-2">&amp;mut </span>rng, idx <span class="kw">as </span>u32, <span class="kw-2">&amp;mut </span>get_port);
+
+                (idx <span class="kw">as </span>u32, worker)
+            })
+            .collect();
+
+        <span class="self">Self </span>{
+            keypair,
+            network_keypair,
+            stake: <span class="number">1</span>,
+            addresses: primary_addresses,
+            workers,
+        }
+    }
+}
+
+<span class="kw">pub struct </span>WorkerFixture {
+    keypair: NetworkKeyPair,
+    <span class="attribute">#[allow(dead_code)]
+    </span>id: WorkerId,
+    info: WorkerInfo,
+}
+
+<span class="kw">impl </span>WorkerFixture {
+    <span class="kw">pub fn </span>keypair(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; NetworkKeyPair {
+        <span class="self">self</span>.keypair.copy()
+    }
+
+    <span class="kw">pub fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>WorkerInfo {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.info
+    }
+
+    <span class="kw">fn </span>generate&lt;R, P&gt;(<span class="kw-2">mut </span>rng: R, id: WorkerId, <span class="kw-2">mut </span>get_port: P) -&gt; <span class="self">Self
+    </span><span class="kw">where
+        </span>R: rand::RngCore + rand::CryptoRng,
+        P: FnMut() -&gt; u16,
+    {
+        <span class="kw">let </span>keypair = NetworkKeyPair::generate(<span class="kw-2">&amp;mut </span>rng);
+        <span class="kw">let </span>worker_name = keypair.public().clone();
+        <span class="kw">let </span>primary_to_worker = <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
+            .parse()
+            .unwrap();
+        <span class="kw">let </span>worker_to_worker = <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
+            .parse()
+            .unwrap();
+        <span class="kw">let </span>transactions = <span class="macro">format!</span>(<span class="string">&quot;/ip4/127.0.0.1/tcp/{}/http&quot;</span>, get_port())
+            .parse()
+            .unwrap();
+
+        <span class="self">Self </span>{
+            keypair,
+            id,
+            info: WorkerInfo {
+                name: worker_name,
+                primary_to_worker,
+                worker_to_worker,
+                transactions,
+            },
+        }
+    }
+}
+
+<span class="kw">pub fn </span>mock_network(keypair: NetworkKeyPair, address: <span class="kw-2">&amp;</span>Multiaddr) -&gt; anemo::Network {
+    <span class="kw">let </span>address = network::multiaddr_to_address(address).unwrap();
+    <span class="kw">let </span>network_key = keypair.private().<span class="number">0</span>.to_bytes();
+    anemo::Network::bind(address)
+        .server_name(<span class="string">&quot;narwhal&quot;</span>)
+        .private_key(network_key)
+        .start(anemo::Router::new())
+        .unwrap()
+}
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="test_utils" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (b44197abb 2022-09-05)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="test_utils" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (59e7a308e 2022-09-11)" ></div></body></html>

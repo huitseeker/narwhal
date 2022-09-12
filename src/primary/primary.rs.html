@@ -673,6 +673,7 @@
 <span id="673">673</span>
 <span id="674">674</span>
 <span id="675">675</span>
+<span id="676">676</span>
 </pre><pre class="rust"><code><span class="comment">// Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
@@ -698,13 +699,13 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId, WorkerInfo};
 <span class="kw">use </span>consensus::dag::Dag;
-<span class="kw">use </span>crypto::{KeyPair, PublicKey};
+<span class="kw">use </span>crypto::{KeyPair, NetworkKeyPair, PublicKey};
 <span class="kw">use </span>fastcrypto::{
     traits::{EncodeDecodeBase64, KeyPair <span class="kw">as _</span>},
     SignatureService,
 };
 <span class="kw">use </span>multiaddr::{Multiaddr, Protocol};
-<span class="kw">use </span>network::{metrics::Metrics, PrimaryNetwork, PrimaryToWorkerNetwork};
+<span class="kw">use </span>network::{metrics::Metrics, P2pNetwork, PrimaryToWorkerNetwork};
 <span class="kw">use </span>prometheus::Registry;
 <span class="kw">use </span>std::{collections::BTreeMap, net::Ipv4Addr, sync::Arc};
 <span class="kw">use </span>storage::CertificateStore;
@@ -743,6 +744,7 @@
     </span><span class="kw">pub fn </span>spawn(
         name: PublicKey,
         signer: KeyPair,
+        network_signer: NetworkKeyPair,
         committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
         parameters: Parameters,
@@ -874,7 +876,7 @@
         <span class="kw">let </span>routes = anemo::Router::new().add_rpc_service(primary_service);
         <span class="kw">let </span>network = anemo::Network::bind(addr)
             .server_name(<span class="string">&quot;narwhal&quot;</span>)
-            .private_key(signer.copy().private().<span class="number">0</span>.to_bytes())
+            .private_key(network_signer.copy().private().<span class="number">0</span>.to_bytes())
             .start(routes)
             .unwrap();
         <span class="macro">info!</span>(
@@ -883,8 +885,8 @@
             address
         );
 
-        <span class="kw">for </span>(pubkey, addresses) <span class="kw">in </span>committee.load().others_primaries(<span class="kw-2">&amp;</span>name) {
-            <span class="kw">let </span>peer_id = PeerId(pubkey.<span class="number">0</span>.to_bytes());
+        <span class="kw">for </span>(<span class="kw">_</span>, addresses, network_pubkey) <span class="kw">in </span>committee.load().others_primaries(<span class="kw-2">&amp;</span>name) {
+            <span class="kw">let </span>peer_id = PeerId(network_pubkey.<span class="number">0</span>.to_bytes());
             <span class="kw">let </span>address = network::multiaddr_to_address(<span class="kw-2">&amp;</span>addresses.primary_to_primary).unwrap();
             <span class="kw">let </span>peer_info = PeerInfo {
                 peer_id,
@@ -934,7 +936,7 @@
         </span><span class="kw">let </span>signature_service = SignatureService::new(signer);
 
         <span class="comment">// The `Core` receives and handles headers, votes, and certificates from the other primaries.
-        </span><span class="kw">let </span>core_primary_network = PrimaryNetwork::new(network.clone());
+        </span><span class="kw">let </span>core_primary_network = P2pNetwork::new(network.clone());
         <span class="kw">let </span>core_handle = Core::spawn(
             name.clone(),
             (<span class="kw-2">**</span>committee.load()).clone(),
@@ -1013,7 +1015,7 @@
 
         <span class="comment">// Responsible for finding missing blocks (certificates) and fetching
         // them from the primary peers by synchronizing also their batches.
-        </span><span class="kw">let </span>block_synchronizer_network = PrimaryNetwork::new(network.clone());
+        </span><span class="kw">let </span>block_synchronizer_network = P2pNetwork::new(network.clone());
         <span class="kw">let </span>block_synchronizer_handle = BlockSynchronizer::spawn(
             name.clone(),
             (<span class="kw-2">**</span>committee.load()).clone(),
@@ -1031,7 +1033,7 @@
         <span class="comment">// Whenever the `Synchronizer` does not manage to validate a header due to missing parent certificates of
         // batch digests, it commands the `HeaderWaiter` to synchronize with other nodes, wait for their reply, and
         // re-schedule execution of the header once we have all missing data.
-        </span><span class="kw">let </span>header_waiter_primary_network = PrimaryNetwork::new(network.clone());
+        </span><span class="kw">let </span>header_waiter_primary_network = P2pNetwork::new(network.clone());
         <span class="kw">let </span>header_waiter_worker_network =
             PrimaryToWorkerNetwork::new(Metrics::new(network_metrics, <span class="string">&quot;header_waiter&quot;</span>.to_string()));
         <span class="kw">let </span>header_waiter_handle = HeaderWaiter::spawn(
@@ -1083,7 +1085,7 @@
 
         <span class="comment">// The `Helper` is dedicated to reply to certificates &amp; payload availability requests
         // from other primaries.
-        </span><span class="kw">let </span>helper_primary_network = PrimaryNetwork::new(network);
+        </span><span class="kw">let </span>helper_primary_network = P2pNetwork::new(network);
         <span class="kw">let </span>helper_handle = Helper::spawn(
             name.clone(),
             (<span class="kw-2">**</span>committee.load()).clone(),
@@ -1169,7 +1171,7 @@
 </span><span class="kw">impl </span>PrimaryToPrimary <span class="kw">for </span>PrimaryReceiverHandler {
     <span class="kw">async fn </span>send_message(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        request: anemo::Request&lt;types::PrimaryMessage&gt;,
+        request: anemo::Request&lt;PrimaryMessage&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;anemo::Response&lt;()&gt;, anemo::rpc::Status&gt; {
         <span class="kw">let </span>message = request.into_body();
 
@@ -1349,4 +1351,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="primary" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (b44197abb 2022-09-05)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="primary" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (59e7a308e 2022-09-11)" ></div></body></html>

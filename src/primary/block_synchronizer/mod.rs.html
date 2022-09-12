@@ -1034,7 +1034,7 @@
     stream::FuturesUnordered,
     FutureExt, StreamExt,
 };
-<span class="kw">use </span>network::{PrimaryNetwork, PrimaryToWorkerNetwork, UnreliableNetwork, UnreliableNetwork2};
+<span class="kw">use </span>network::{P2pNetwork, PrimaryToWorkerNetwork, UnreliableNetwork, UnreliableNetwork2};
 <span class="kw">use </span>rand::{rngs::SmallRng, SeedableRng};
 <span class="kw">use </span>std::{
     collections::{HashMap, HashSet},
@@ -1202,7 +1202,7 @@
         HashMap&lt;RequestID, Sender&lt;PayloadAvailabilityResponse&gt;&gt;,
 
     <span class="doccomment">/// Send network requests
-    </span>primary_network: PrimaryNetwork,
+    </span>primary_network: P2pNetwork,
     worker_network: PrimaryToWorkerNetwork,
 
     <span class="doccomment">/// The store that holds the certificates
@@ -1231,7 +1231,7 @@
         rx_commands: metered_channel::Receiver&lt;Command&gt;,
         rx_certificate_responses: metered_channel::Receiver&lt;CertificatesResponse&gt;,
         rx_payload_availability_responses: metered_channel::Receiver&lt;PayloadAvailabilityResponse&gt;,
-        network: PrimaryNetwork,
+        network: P2pNetwork,
         payload_store: Store&lt;(BatchDigest, WorkerId), PayloadToken&gt;,
         certificate_store: CertificateStore,
         parameters: BlockSynchronizerParameters,
@@ -1648,18 +1648,18 @@
     </span><span class="kw">async fn </span>broadcast_batch_request(<span class="kw-2">&amp;mut </span><span class="self">self</span>, message: PrimaryMessage) -&gt; Vec&lt;PublicKey&gt; {
         <span class="comment">// Naively now just broadcast the request to all the primaries
 
-        </span><span class="kw">let </span>primaries_names: Vec&lt;<span class="kw">_</span>&gt; = <span class="self">self
+        </span><span class="kw">let </span>(keys, network_keys): (Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;) = <span class="self">self
             </span>.committee
             .others_primaries(<span class="kw-2">&amp;</span><span class="self">self</span>.name)
             .into_iter()
-            .map(|(name, _address)| name)
-            .collect();
+            .map(|(name, _address, network_key)| (name, network_key))
+            .unzip();
 
         <span class="self">self</span>.primary_network
-            .unreliable_broadcast(primaries_names.clone(), <span class="kw-2">&amp;</span>message)
+            .unreliable_broadcast(network_keys.clone(), <span class="kw-2">&amp;</span>message)
             .<span class="kw">await</span>;
 
-        primaries_names
+        keys
     }
 
     <span class="attribute">#[instrument(level=<span class="string">&quot;trace&quot;</span>, skip_all, fields(request_id = <span class="question-mark">?</span>request_id))]
@@ -1863,7 +1863,7 @@
                             </span>peers.add_peer(response.from.clone(), certificates);
 
                             <span class="comment">// We have received all possible responses
-                            </span><span class="kw">if </span>(peers.unique_values().len() == total_expected_certificates &amp;&amp;
+                            </span><span class="kw">if </span>(peers.unique_value_count() == total_expected_certificates &amp;&amp;
                             <span class="self">Self</span>::reached_response_ratio(num_of_responses, num_of_requests_sent))
                             || num_of_responses == num_of_requests_sent
                             {
@@ -1953,7 +1953,7 @@
                     </span>peers.add_peer(response.from.clone(), available_certs_for_peer);
 
                     <span class="comment">// We have received all possible responses
-                    </span><span class="kw">if </span>(peers.unique_values().len() == total_expected_block_ids &amp;&amp;
+                    </span><span class="kw">if </span>(peers.unique_value_count() == total_expected_block_ids &amp;&amp;
                     <span class="self">Self</span>::reached_response_ratio(num_of_responses, num_of_requests_sent))
                     || num_of_responses == num_of_requests_sent
                     {
@@ -2033,4 +2033,4 @@
     </span>}
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="primary" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (b44197abb 2022-09-05)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="primary" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (59e7a308e 2022-09-11)" ></div></body></html>
